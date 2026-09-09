@@ -29,6 +29,7 @@ import type {
   ShapeKind,
   SketchEdit,
   Stroke,
+  Vec3,
 } from "@/lib/meshpad/types";
 import { emptyScene, uid } from "@/lib/meshpad/types";
 
@@ -120,8 +121,14 @@ function MeshPad() {
     setProjectId(saved.id);
   };
 
-  const handleSketchAdd = (stroke: Point[]) => {
-    const edit: SketchEdit = { id: uid(), operation: "add", points: stroke, createdAt: Date.now() };
+  const handleSketchAdd = (stroke: Point[], rotation: Vec3, depthStroke: boolean) => {
+    const edit: SketchEdit = {
+      id: uid(),
+      operation: "add",
+      points: stroke,
+      createdAt: Date.now(),
+      depthStroke,
+    };
     const nextEdits = [...sketchEdits, edit];
     if (stroke.length < 2) return;
     const additions: SceneObject[] = [
@@ -129,6 +136,7 @@ function MeshPad() {
         name: `Sketch part ${objects.length + 1}`,
         sketchPath: stroke,
         thickness: 0.16,
+        rotation,
       }),
     ];
     const next = [...objects, ...additions];

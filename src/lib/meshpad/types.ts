@@ -11,6 +11,8 @@ export type SketchEdit = {
   operation: "add" | "delete";
   points: Point[];
   createdAt: number;
+  /** True when the stroke was drawn while its sketch plane was edge-on. */
+  depthStroke?: boolean;
 };
 
 export type ShapeKind = "cube" | "sphere" | "cylinder" | "cone" | "extrude" | "sketch";
