@@ -1,6 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FilePlus2, Grid3x3, RotateCcw, Save, Trash2, Undo2, Redo2 } from "lucide-react";
+import {
+  Download,
+  FilePlus2,
+  Grid3x3,
+  HeartHandshake,
+  MessageCircleHeart,
+  RotateCcw,
+  Save,
+  Sparkles,
+  Trash2,
+  Undo2,
+  Redo2,
+} from "lucide-react";
 import { Viewer3D } from "@/components/meshpad/Viewer3D";
 import { SketchEditPanel, SKETCH_HEIGHT, SKETCH_WIDTH } from "@/components/meshpad/SketchEditPanel";
 import { ShapeLibrary } from "@/components/meshpad/ShapeLibrary";
@@ -24,17 +36,16 @@ export const Route = createFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "MeshPad Lite — Draw a shape, turn it into 3D" },
+      { title: "Imagine & Create — Family 3D Workshop" },
       {
         name: "description",
         content:
-          "A friendly browser 3D studio for families: draw a closed outline, extrude it into a mesh, edit shapes and export OBJ or STL.",
+          "A family creativity experience where children imagine, create, print, and share what their ideas mean.",
       },
-      { property: "og:title", content: "MeshPad Lite — Draw a shape, turn it into 3D" },
+      { property: "og:title", content: "Imagine & Create — Family 3D Workshop" },
       {
         property: "og:description",
-        content:
-          "Draw, extrude, edit and export 3D models right in your browser. No sign-up needed.",
+        content: "From what I imagine, to what I create, to what we understand about each other.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -298,9 +309,9 @@ function MeshPad() {
               ◆
             </span>
             <div className="min-w-0">
-              <h1 className="font-display truncate text-xl">MeshPad Lite</h1>
+              <h1 className="font-display truncate text-xl">Imagine &amp; Create</h1>
               <p className="truncate text-xs text-muted-foreground">
-                Draw → Extrude → Edit → Export
+                Imagine → Create → Print → Understand
               </p>
             </div>
           </div>
@@ -330,6 +341,37 @@ function MeshPad() {
       <main className="mx-auto max-w-7xl space-y-4 px-4 py-4">
         {showHelp && <Onboarding onDismiss={() => setShowHelp(false)} />}
 
+        <section className="overflow-hidden rounded-[2rem] border border-border bg-gradient-to-br from-[#fff1dc] via-card to-[#e3f5ef] p-5 shadow-soft sm:p-7">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-card/80 px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+                <Sparkles className="h-4 w-4" /> Family 3D workshop
+              </div>
+              <h2 className="max-w-2xl font-display text-3xl leading-tight sm:text-5xl">
+                What I imagine → what I create → what we understand.
+              </h2>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+                Make something together, then use it as a doorway into your child’s ideas, feelings,
+                and stories.
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-sm font-semibold">
+              <div className="rounded-2xl bg-card/80 p-3">
+                <Sparkles className="mx-auto mb-2 h-6 w-6 text-primary" />
+                Imagine
+              </div>
+              <div className="rounded-2xl bg-card/80 p-3">
+                <HeartHandshake className="mx-auto mb-2 h-6 w-6 text-success" />
+                Create
+              </div>
+              <div className="rounded-2xl bg-card/80 p-3">
+                <MessageCircleHeart className="mx-auto mb-2 h-6 w-6 text-secondary" />
+                Share
+              </div>
+            </div>
+          </div>
+        </section>
+
         <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           <div className="space-y-4">
             <SketchEditPanel
@@ -340,9 +382,9 @@ function MeshPad() {
             />
 
             <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
-              <h2 className="font-display text-xl">2. Add ready-made shapes</h2>
+              <h2 className="font-display text-xl">2. Add building blocks</h2>
               <p className="mb-3 text-sm text-muted-foreground">
-                Tap one to drop it into your scene.
+                Add a simple shape when your family wants a starting point.
               </p>
               <ShapeLibrary onAdd={(kind) => addShape(kind)} />
             </section>
@@ -351,7 +393,7 @@ function MeshPad() {
           <div className="space-y-4">
             <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                <h2 className="font-display truncate text-xl">3. Your 3D scene</h2>
+                <h2 className="font-display truncate text-xl">3. Create your object</h2>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <HeaderButton
                     onClick={scene.undo}
@@ -421,7 +463,7 @@ function MeshPad() {
             </section>
 
             <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
-              <h2 className="font-display text-xl">4. Edit &amp; export</h2>
+              <h2 className="font-display text-xl">4. Prepare it for the real world</h2>
               <div className="mt-3 flex flex-wrap gap-2">
                 {objects.map((o) => (
                   <button
@@ -462,19 +504,56 @@ function MeshPad() {
                   onClick={() => exportScene("obj")}
                   className="inline-flex items-center gap-2 rounded-2xl bg-secondary px-4 py-3 font-semibold text-secondary-foreground hover:brightness-105"
                 >
-                  <Download className="h-4 w-4" /> Download OBJ
+                  <Download className="h-4 w-4" /> Export OBJ
                 </button>
                 <button
                   type="button"
                   onClick={() => exportScene("stl")}
                   className="inline-flex items-center gap-2 rounded-2xl bg-secondary px-4 py-3 font-semibold text-secondary-foreground hover:brightness-105"
                 >
-                  <Download className="h-4 w-4" /> Download STL
+                  <Download className="h-4 w-4" /> Export STL for printing
                 </button>
               </div>
             </section>
           </div>
         </div>
+
+        <section className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-primary/15 text-primary">
+                <Download className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
+                  Next step
+                </p>
+                <h3 className="font-display text-xl">Make it real</h3>
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Export your family’s creation for 3D printing, then let the child hold the idea they
+              imagined.
+            </p>
+          </div>
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-secondary/15 text-secondary">
+                <MessageCircleHeart className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-secondary">
+                  Family reflection
+                </p>
+                <h3 className="font-display text-xl">What does it mean?</h3>
+              </div>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+              Ask: “What does your object represent?” “What should it help us remember?” “How can we
+              build on this idea together?”
+            </p>
+          </div>
+        </section>
 
         <p aria-live="polite" className="min-h-5 text-sm text-muted-foreground">
           {status}
