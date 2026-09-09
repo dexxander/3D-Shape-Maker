@@ -14,6 +14,10 @@ type Props = {
   canUndo: boolean;
   canRedo: boolean;
   onExtrude: (outline: Point[]) => void;
+  title?: string;
+  description?: string;
+  actionLabel?: string;
+  showAction?: boolean;
 };
 
 const ERASER_RADIUS = 18;
@@ -44,6 +48,10 @@ export function DrawingPanel({
   canUndo,
   canRedo,
   onExtrude,
+  title = "1. Draw a shape",
+  description = "Draw a closed radial profile, then revolve it into 3D.",
+  actionLabel = "Revolve 3D →",
+  showAction = true,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<"draw" | "erase">("draw");
@@ -51,42 +59,39 @@ export function DrawingPanel({
   const drawing = useRef(false);
   const liveStroke = useRef<Point[]>([]);
 
-  const paint = useCallback(
-    (list: Stroke[]) => {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (!canvas || !ctx) return;
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const paint = useCallback((list: Stroke[]) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.strokeStyle = "#e6edf2";
-      ctx.lineWidth = 1;
-      for (let i = 50; i < canvas.width; i += 50) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, canvas.height);
-        ctx.moveTo(0, i);
-        ctx.lineTo(canvas.width, i);
-        ctx.stroke();
-      }
+    ctx.strokeStyle = "#e6edf2";
+    ctx.lineWidth = 1;
+    for (let i = 50; i < canvas.width; i += 50) {
+      ctx.beginPath();
+      ctx.moveTo(i, 0);
+      ctx.lineTo(i, canvas.height);
+      ctx.moveTo(0, i);
+      ctx.lineTo(canvas.width, i);
+      ctx.stroke();
+    }
 
-      ctx.strokeStyle = "#e0393e";
-      ctx.lineWidth = 6;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      const all = liveStroke.current.length
-        ? [...list, { id: "live", points: liveStroke.current }]
-        : list;
-      for (const s of all) {
-        if (s.points.length < 2) continue;
-        ctx.beginPath();
-        ctx.moveTo(s.points[0]!.x, s.points[0]!.y);
-        for (const p of s.points.slice(1)) ctx.lineTo(p.x, p.y);
-        ctx.stroke();
-      }
-    },
-    [],
-  );
+    ctx.strokeStyle = "#e0393e";
+    ctx.lineWidth = 6;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const all = liveStroke.current.length
+      ? [...list, { id: "live", points: liveStroke.current }]
+      : list;
+    for (const s of all) {
+      if (s.points.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(s.points[0]!.x, s.points[0]!.y);
+      for (const p of s.points.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+  }, []);
 
   useEffect(() => {
     paint(strokes);
@@ -158,8 +163,8 @@ export function DrawingPanel({
     <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
       <header className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
         <div className="min-w-0">
-          <h2 className="font-display truncate text-xl">1. Draw a shape</h2>
-          <p className="text-sm text-muted-foreground">Draw one closed outline, then press Make 3D.</p>
+          <h2 className="font-display truncate text-xl">{title}</h2>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         <span
           className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
@@ -213,18 +218,23 @@ export function DrawingPanel({
       </div>
 
       {error && (
-        <p role="alert" className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
           {error}
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={handleExtrude}
-        className="mt-4 w-full rounded-2xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground shadow-soft transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        Make 3D →
-      </button>
+      {showAction && (
+        <button
+          type="button"
+          onClick={handleExtrude}
+          className="mt-4 w-full rounded-2xl bg-primary px-4 py-3 text-base font-semibold text-primary-foreground shadow-soft transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          {actionLabel}
+        </button>
+      )}
     </section>
   );
 }

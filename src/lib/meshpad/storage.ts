@@ -1,4 +1,4 @@
-import type { Project, SceneState, Stroke } from "./types";
+import type { Project, SceneState, SketchEdit, Stroke } from "./types";
 import { uid } from "./types";
 
 /**
@@ -30,6 +30,7 @@ export function saveProject(input: {
   name: string;
   scene: SceneState;
   strokes: Stroke[];
+  sketchEdits?: SketchEdit[];
 }): Project {
   const project: Project = {
     id: input.id ?? uid(),
@@ -37,6 +38,7 @@ export function saveProject(input: {
     updatedAt: Date.now(),
     scene: input.scene,
     strokes: input.strokes,
+    sketchEdits: input.sketchEdits,
   };
   if (!canUse()) return project;
   const all = listProjects().filter((p) => p.id !== project.id);

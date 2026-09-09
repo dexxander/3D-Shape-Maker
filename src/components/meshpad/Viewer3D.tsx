@@ -10,9 +10,10 @@ type Props = {
   wireframe: boolean;
   resetToken: number;
   onSelect: (id: string | null) => void;
+  onMove: (id: string, position: [number, number, number]) => void;
 };
 
-export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect }: Props) {
+export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect, onMove }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     scene: THREE.Scene;
@@ -23,6 +24,10 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect 
   } | null>(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
+  const moveRef = useRef(onMove);
+  moveRef.current = onMove;
+  const objectsRef = useRef(objects);
+  objectsRef.current = objects;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -87,8 +92,44 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     let downAt = { x: 0, y: 0 };
-    const onDown = (e: PointerEvent) => (downAt = { x: e.clientX, y: e.clientY });
+    let draggingId: string | null = null;
+    const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.8);
+    const onDown = (e: PointerEvent) => {
+      downAt = { x: e.clientX, y: e.clientY };
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hit = raycaster
+        .intersectObjects(group.children, false)
+        .find((entry) => typeof entry.object.userData["id"] === "string");
+      const id = hit?.object.userData["id"] as string | undefined;
+      if (!id) return;
+      selectRef.current(id);
+      draggingId = id;
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture(e.pointerId);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!draggingId) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const point = raycaster.ray.intersectPlane(dragPlane, new THREE.Vector3());
+      const current = objectsRef.current.find((object) => object.id === draggingId);
+      if (point && current) moveRef.current(draggingId, [point.x, current.position[1], point.z]);
+    };
+    const onDragEnd = (e: PointerEvent) => {
+      if (draggingId) renderer.domElement.releasePointerCapture(e.pointerId);
+      draggingId = null;
+      controls.enabled = true;
+    };
     const onUp = (e: PointerEvent) => {
+      if (draggingId) {
+        onDragEnd(e);
+        return;
+      }
       if (Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 5) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -98,7 +139,9 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect 
       selectRef.current(hit ? ((hit.object.userData["id"] as string) ?? null) : null);
     };
     renderer.domElement.addEventListener("pointerdown", onDown);
+    renderer.domElement.addEventListener("pointermove", onMove);
     renderer.domElement.addEventListener("pointerup", onUp);
+    renderer.domElement.addEventListener("pointercancel", onDragEnd);
 
     let raf = 0;
     const loop = () => {
@@ -112,7 +155,9 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect 
       cancelAnimationFrame(raf);
       ro.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onDown);
+      renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerup", onUp);
+      renderer.domElement.removeEventListener("pointercancel", onDragEnd);
       controls.dispose();
       renderer.dispose();
       host.removeChild(renderer.domElement);

@@ -1,7 +1,7 @@
 const STEPS = [
-  { title: "Draw", text: "Sketch one closed outline on the white canvas." },
-  { title: "Extrude", text: "Press Make 3D to give your drawing thickness." },
-  { title: "Edit", text: "Add shapes, then move, rotate, resize or duplicate." },
+  { title: "Sketch", text: "Choose ADD or DEL and draw an edit stroke." },
+  { title: "Build", text: "Each ADD stroke contributes new 3D mesh parts." },
+  { title: "Refine", text: "Use DEL strokes and repeat edits to shape the object." },
   { title: "Export", text: "Download your scene as an OBJ or STL file." },
 ];
 
