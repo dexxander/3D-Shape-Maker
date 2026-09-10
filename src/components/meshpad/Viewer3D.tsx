@@ -14,8 +14,8 @@ function addRoomDecor(scene: THREE.Scene) {
   // Soft foam play-mat floor: alternating tiles make the room read instantly as a toy space.
   const tileColors = ["#f8c7d8", "#bde8df", "#ffe4a8", "#c8d7ff"];
   const tileGeometry = new THREE.BoxGeometry(1.85, 0.12, 1.85);
-  for (let x = -5; x <= 5; x++) {
-    for (let z = -5; z <= 5; z++) {
+  for (let x = -7; x <= 7; x++) {
+    for (let z = -7; z <= 7; z++) {
       const colorIndex = ((x + z + 8) % tileColors.length + tileColors.length) % tileColors.length;
       const tile = new THREE.Mesh(tileGeometry, roomMaterial(tileColors[colorIndex]!));
       tile.position.set(x * 1.9, -0.07, z * 1.9);
@@ -25,12 +25,12 @@ function addRoomDecor(scene: THREE.Scene) {
   }
 
   // Back wall and side wall give the camera a cozy indoor playroom frame.
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(22, 7, 0.22), roomMaterial("#fff3df"));
-  wall.position.set(0, 3.35, -10.8);
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(30, 7, 0.22), roomMaterial("#fff3df"));
+  wall.position.set(0, 3.35, -14.8);
   wall.receiveShadow = true;
   decor.add(wall);
-  const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7, 22), roomMaterial("#e7f6f3"));
-  sideWall.position.set(-10.8, 3.35, 0);
+  const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7, 30), roomMaterial("#e7f6f3"));
+  sideWall.position.set(-14.8, 3.35, 0);
   sideWall.receiveShadow = true;
   decor.add(sideWall);
 
@@ -162,6 +162,69 @@ function addRoomDecor(scene: THREE.Scene) {
   });
   decor.add(tent);
 
+  // Larger play-center details: a mini slide, climbing arch, and ball pit.
+  const slideColor = roomMaterial("#f39a5d");
+  const slideDeck = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.2, 1.8), roomMaterial("#ffc857"));
+  slideDeck.position.set(5.8, 1.65, 3.9);
+  slideDeck.castShadow = true;
+  decor.add(slideDeck);
+  for (const x of [5.1, 6.5]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.7, 0.18), slideColor);
+    leg.position.set(x, 0.82, 3.9);
+    leg.castShadow = true;
+    decor.add(leg);
+  }
+  const slide = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.16, 4.1), slideColor);
+  slide.position.set(5.8, 0.8, 5.9);
+  slide.rotation.x = -0.28;
+  slide.castShadow = true;
+  decor.add(slide);
+  for (const x of [4.85, 6.75]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.45, 1.65), roomMaterial("#e05c6e"));
+    rail.position.set(x, 1.9, 3.9);
+    rail.castShadow = true;
+    decor.add(rail);
+  }
+
+  const arch = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.12, 12, 32, Math.PI), roomMaterial("#6a8cff"));
+  arch.position.set(-2.6, 1.45, 4.8);
+  arch.rotation.set(Math.PI / 2, 0, 0);
+  arch.castShadow = true;
+  decor.add(arch);
+  for (const x of [-3.75, -1.45]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.45, 0.18), roomMaterial("#48b8a0"));
+    post.position.set(x, 0.72, 4.8);
+    post.castShadow = true;
+    decor.add(post);
+  }
+
+  const pitBase = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.65, 2.8), roomMaterial("#8f7bd8"));
+  pitBase.position.set(-5.4, 0.3, 4.4);
+  pitBase.castShadow = true;
+  pitBase.receiveShadow = true;
+  decor.add(pitBase);
+  const pitBallColors = ["#ff8a5b", "#ffc857", "#48b8a0", "#e05c6e", "#6a8cff"];
+  for (let i = 0; i < 12; i++) {
+    const pitBall = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), roomMaterial(pitBallColors[i % pitBallColors.length]!));
+    pitBall.position.set(-6.55 + (i % 4) * 0.75, 0.72 + Math.floor(i / 4) * 0.18, 3.7 + (i % 3) * 0.55);
+    pitBall.castShadow = true;
+    decor.add(pitBall);
+  }
+
+  // Ceiling beams and colorful wall circles add depth to the enlarged room.
+  for (let x = -10; x <= 10; x += 5) {
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 28), roomMaterial("#d99566"));
+    beam.position.set(x, 6.7, -1.2);
+    decor.add(beam);
+  }
+  const wallArtColors = ["#ff9fb8", "#ffc857", "#8bd3c7", "#a9bdf5"];
+  for (let i = 0; i < 4; i++) {
+    const art = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.12, 10, 24), roomMaterial(wallArtColors[i]!));
+    art.position.set(-8 + i * 1.6, 3.9, -14.62);
+    art.rotation.x = Math.PI / 2;
+    decor.add(art);
+  }
+
   scene.add(decor);
   return decor;
 }
@@ -209,7 +272,7 @@ export function Viewer3D({
     scene.background = new THREE.Color("#cfeef4");
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
-    camera.position.set(12.5, 7.5, 13.5);
+    camera.position.set(16.5, 9.5, 17.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -222,7 +285,7 @@ export function Viewer3D({
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 1.2, -1.2);
+    controls.target.set(0, 1.2, -1.8);
 
     scene.add(new THREE.HemisphereLight("#fffaf2", "#8fbcc5", 1.7));
     const key = new THREE.DirectionalLight("#ffffff", 1.9);
@@ -370,8 +433,8 @@ export function Viewer3D({
   useEffect(() => {
     const s = stateRef.current;
     if (!s) return;
-    s.camera.position.set(12.5, 7.5, 13.5);
-    s.controls.target.set(0, 1.2, -1.2);
+    s.camera.position.set(16.5, 9.5, 17.5);
+    s.controls.target.set(0, 1.2, -1.8);
     s.controls.update();
   }, [resetToken]);
 
