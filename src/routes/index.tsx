@@ -58,10 +58,13 @@ export const Route = createFileRoute("/")({
 /** Sample scene so the app is useful the moment it opens. */
 function starterScene(): SceneState {
   const cube = makeObject("cube", 0);
+  cube.name = "Building block";
   cube.position = [-1.4, 0.6, 0];
   const sphere = makeObject("sphere", 1);
+  sphere.name = "Play ball";
   sphere.position = [1.4, 0.7, 0];
   const cone = makeObject("cone", 3);
+  cone.name = "Party hat";
   cone.position = [0, 0.75, -1.6];
   return { objects: [cube, sphere, cone], selectedId: cube.id };
 }
@@ -319,7 +322,7 @@ function MeshPad() {
             <div className="min-w-0">
               <h1 className="font-display truncate text-xl">Imagine &amp; Create</h1>
               <p className="truncate text-xs text-muted-foreground">
-                Imagine → Create → Print → Understand
+                Imagine → Build → Play → Share
               </p>
             </div>
           </div>
@@ -356,11 +359,11 @@ function MeshPad() {
                 <Sparkles className="h-4 w-4" /> Family 3D workshop
               </div>
               <h2 className="max-w-2xl font-display text-3xl leading-tight sm:text-5xl">
-                What I imagine → what I create → what we understand.
+                Build a toy-room playground for big little ideas.
               </h2>
               <p className="mt-3 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-                Make something together, then use it as a doorway into your child’s ideas, feelings,
-                and stories.
+                Turn simple shapes into playful toys, then move them around a bright 3D playroom and
+                make up a story together.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-sm font-semibold">
@@ -401,7 +404,7 @@ function MeshPad() {
           <div className="space-y-4">
             <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                <h2 className="font-display truncate text-xl">3. Create your object</h2>
+                <h2 className="font-display truncate text-xl">3. Play in your toy room</h2>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <HeaderButton
                     onClick={scene.undo}

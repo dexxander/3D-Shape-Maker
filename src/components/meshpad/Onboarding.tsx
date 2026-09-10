@@ -1,8 +1,8 @@
 const STEPS = [
   { title: "Imagine", text: "Children sketch an idea and give it a name." },
-  { title: "Create", text: "Turn the sketch into a playful 3D object together." },
-  { title: "Print", text: "Export the creation and bring it into the real world." },
-  { title: "Understand", text: "Use the object to open a family conversation." },
+  { title: "Build", text: "Turn the idea into a colorful toy for the room." },
+  { title: "Play", text: "Move it around the soft-floor playground together." },
+  { title: "Share", text: "Use the scene to open a family conversation." },
 ];
 
 export function Onboarding({ onDismiss }: { onDismiss: () => void }) {
@@ -12,7 +12,7 @@ export function Onboarding({ onDismiss }: { onDismiss: () => void }) {
       className="rounded-3xl border border-border bg-gradient-to-br from-accent/60 to-card p-4 shadow-soft sm:p-5"
     >
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-        <h2 className="font-display truncate text-lg">From imagination to creation</h2>
+        <h2 className="font-display truncate text-lg">From imagination to playtime</h2>
         <button
           type="button"
           onClick={onDismiss}

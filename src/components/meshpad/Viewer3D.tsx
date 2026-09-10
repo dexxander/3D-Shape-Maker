@@ -4,6 +4,118 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { SceneObject } from "@/lib/meshpad/types";
 import { buildGeometry } from "@/lib/meshpad/geometry";
 
+const roomMaterial = (color: string, roughness = 0.72) =>
+  new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+
+function addRoomDecor(scene: THREE.Scene) {
+  const decor = new THREE.Group();
+  decor.name = "toy-room-decor";
+
+  // Soft foam play-mat floor: alternating tiles make the room read instantly as a toy space.
+  const tileColors = ["#f8c7d8", "#bde8df", "#ffe4a8", "#c8d7ff"];
+  const tileGeometry = new THREE.BoxGeometry(1.85, 0.12, 1.85);
+  for (let x = -3; x <= 3; x++) {
+    for (let z = -3; z <= 3; z++) {
+      const tile = new THREE.Mesh(tileGeometry, roomMaterial(tileColors[(x + z + 8) % tileColors.length]!));
+      tile.position.set(x * 1.9, -0.07, z * 1.9);
+      tile.receiveShadow = true;
+      decor.add(tile);
+    }
+  }
+
+  // Back wall and side wall give the camera a cozy indoor playroom frame.
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 7, 0.22), roomMaterial("#fff3df"));
+  wall.position.set(0, 3.35, -6.8);
+  wall.receiveShadow = true;
+  decor.add(wall);
+  const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7, 14), roomMaterial("#e7f6f3"));
+  sideWall.position.set(-6.8, 3.35, 0);
+  sideWall.receiveShadow = true;
+  decor.add(sideWall);
+
+  // A low colorful rug keeps the middle open for the shapes the child creates.
+  const rug = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.08, 3.5), roomMaterial("#fffaf0"));
+  rug.position.set(0.55, 0.02, 0.75);
+  rug.receiveShadow = true;
+  decor.add(rug);
+  for (let i = -2; i <= 2; i++) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 3.56), roomMaterial(["#ff9fb8", "#ffc857", "#8bd3c7"][Math.abs(i) % 3]!));
+    stripe.position.set(0.55 + i * 1.04, 0.08, 0.75);
+    decor.add(stripe);
+  }
+
+  // Toy shelf against the back wall.
+  const wood = roomMaterial("#d99566");
+  const shelfParts = [
+    [4.55, 1.25, -5.95, 2.7, 0.18, 0.62],
+    [4.55, 2.3, -5.95, 2.7, 0.18, 0.62],
+    [4.55, 0.2, -5.95, 2.95, 0.28, 0.75],
+    [3.25, 1.65, -5.95, 0.18, 2.8, 0.72],
+    [5.85, 1.65, -5.95, 0.18, 2.8, 0.72],
+  ] as const;
+  for (const [x, y, z, sx, sy, sz] of shelfParts) {
+    const part = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), wood);
+    part.position.set(x, y, z);
+    part.castShadow = true;
+    part.receiveShadow = true;
+    decor.add(part);
+  }
+  const blockColors = ["#ff8a5b", "#6a8cff", "#ffc857", "#48b8a0"];
+  for (let i = 0; i < 4; i++) {
+    const block = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.48), roomMaterial(blockColors[i]!));
+    block.position.set(3.7 + i * 0.52, 1.62, -5.55);
+    block.rotation.y = i * 0.22;
+    block.castShadow = true;
+    decor.add(block);
+  }
+
+  // Teddy bear: a friendly silhouette made from soft spheres.
+  const bear = new THREE.Group();
+  const fur = roomMaterial("#a96d4b");
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.52, 24, 16), fur);
+  belly.scale.set(0.85, 1.05, 0.65);
+  belly.position.set(4.5, 0.82, -4.95);
+  bear.add(belly);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.48, 24, 16), fur);
+  head.position.set(4.5, 1.55, -4.95);
+  bear.add(head);
+  for (const [x, y] of [[4.18, 1.88], [4.82, 1.88]] as const) {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), fur);
+    ear.position.set(x, y, -4.95);
+    bear.add(ear);
+  }
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), roomMaterial("#f4c5a2"));
+  muzzle.position.set(4.5, 1.43, -4.52);
+  bear.add(muzzle);
+  bear.traverse((child) => {
+    if (child instanceof THREE.Mesh) child.castShadow = true;
+  });
+  decor.add(bear);
+
+  // Oversized beach ball in the corner.
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.65, 32, 20), roomMaterial("#ff8a5b", 0.5));
+  ball.position.set(-4.7, 0.68, -4.85);
+  ball.castShadow = true;
+  decor.add(ball);
+  for (const rotation of [0.3, 2.4, 4.5]) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.045, 8, 32, Math.PI * 0.58), roomMaterial("#fff8e8", 0.5));
+    band.position.copy(ball.position);
+    band.rotation.set(Math.PI / 2, rotation, 0);
+    decor.add(band);
+  }
+
+  // Small wall pennants add a playful finish without competing with the editable meshes.
+  const pennantColors = ["#ff8a5b", "#6a8cff", "#ffc857", "#48b8a0", "#e05c6e"];
+  for (let i = 0; i < 5; i++) {
+    const pennant = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 3), roomMaterial(pennantColors[i]!));
+    pennant.position.set(-2.1 + i * 1.05, 5.55, -6.62);
+    pennant.rotation.set(Math.PI / 2, 0, Math.PI);
+    decor.add(pennant);
+  }
+
+  scene.add(decor);
+}
+
 type Props = {
   objects: SceneObject[];
   selectedId: string | null;
@@ -34,10 +146,10 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
     if (!host) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#eef3f6");
+    scene.background = new THREE.Color("#cfeef4");
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
-    camera.position.set(4.5, 3.6, 5.5);
+    camera.position.set(7.4, 5.2, 8.2);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -50,28 +162,19 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 0.8, 0);
+    controls.target.set(0, 1.3, -0.4);
 
-    scene.add(new THREE.HemisphereLight("#ffffff", "#c8d3da", 1.1));
+    scene.add(new THREE.HemisphereLight("#fffaf2", "#8fbcc5", 1.7));
     const key = new THREE.DirectionalLight("#ffffff", 1.9);
-    key.position.set(6, 9, 5);
+    key.position.set(5, 9, 4);
     key.castShadow = true;
     key.shadow.mapSize.set(1024, 1024);
     scene.add(key);
-    const fill = new THREE.DirectionalLight("#ffd9b3", 0.5);
+    const fill = new THREE.DirectionalLight("#ffd9b3", 0.7);
     fill.position.set(-6, 3, -4);
     scene.add(fill);
 
-    const grid = new THREE.GridHelper(20, 20, "#9bb0bd", "#c9d6de");
-    scene.add(grid);
-
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(40, 40),
-      new THREE.ShadowMaterial({ opacity: 0.16 }),
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
+    addRoomDecor(scene);
 
     const group = new THREE.Group();
     scene.add(group);
@@ -207,8 +310,8 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
   useEffect(() => {
     const s = stateRef.current;
     if (!s) return;
-    s.camera.position.set(4.5, 3.6, 5.5);
-    s.controls.target.set(0, 0.8, 0);
+    s.camera.position.set(7.4, 5.2, 8.2);
+    s.controls.target.set(0, 1.3, -0.4);
     s.controls.update();
   }, [resetToken]);
 
