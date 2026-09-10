@@ -14,9 +14,10 @@ function addRoomDecor(scene: THREE.Scene) {
   // Soft foam play-mat floor: alternating tiles make the room read instantly as a toy space.
   const tileColors = ["#f8c7d8", "#bde8df", "#ffe4a8", "#c8d7ff"];
   const tileGeometry = new THREE.BoxGeometry(1.85, 0.12, 1.85);
-  for (let x = -3; x <= 3; x++) {
-    for (let z = -3; z <= 3; z++) {
-      const tile = new THREE.Mesh(tileGeometry, roomMaterial(tileColors[(x + z + 8) % tileColors.length]!));
+  for (let x = -5; x <= 5; x++) {
+    for (let z = -5; z <= 5; z++) {
+      const colorIndex = ((x + z + 8) % tileColors.length + tileColors.length) % tileColors.length;
+      const tile = new THREE.Mesh(tileGeometry, roomMaterial(tileColors[colorIndex]!));
       tile.position.set(x * 1.9, -0.07, z * 1.9);
       tile.receiveShadow = true;
       decor.add(tile);
@@ -24,34 +25,34 @@ function addRoomDecor(scene: THREE.Scene) {
   }
 
   // Back wall and side wall give the camera a cozy indoor playroom frame.
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(14, 7, 0.22), roomMaterial("#fff3df"));
-  wall.position.set(0, 3.35, -6.8);
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(22, 7, 0.22), roomMaterial("#fff3df"));
+  wall.position.set(0, 3.35, -10.8);
   wall.receiveShadow = true;
   decor.add(wall);
-  const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7, 14), roomMaterial("#e7f6f3"));
-  sideWall.position.set(-6.8, 3.35, 0);
+  const sideWall = new THREE.Mesh(new THREE.BoxGeometry(0.22, 7, 22), roomMaterial("#e7f6f3"));
+  sideWall.position.set(-10.8, 3.35, 0);
   sideWall.receiveShadow = true;
   decor.add(sideWall);
 
   // A low colorful rug keeps the middle open for the shapes the child creates.
-  const rug = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.08, 3.5), roomMaterial("#fffaf0"));
-  rug.position.set(0.55, 0.02, 0.75);
+  const rug = new THREE.Mesh(new THREE.BoxGeometry(7.8, 0.08, 5.2), roomMaterial("#fffaf0"));
+  rug.position.set(0.3, 0.02, 0.6);
   rug.receiveShadow = true;
   decor.add(rug);
-  for (let i = -2; i <= 2; i++) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.09, 3.56), roomMaterial(["#ff9fb8", "#ffc857", "#8bd3c7"][Math.abs(i) % 3]!));
-    stripe.position.set(0.55 + i * 1.04, 0.08, 0.75);
+  for (let i = -3; i <= 3; i++) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.09, 5.26), roomMaterial(["#ff9fb8", "#ffc857", "#8bd3c7"][Math.abs(i) % 3]!));
+    stripe.position.set(0.3 + i * 1.08, 0.08, 0.6);
     decor.add(stripe);
   }
 
   // Toy shelf against the back wall.
   const wood = roomMaterial("#d99566");
   const shelfParts = [
-    [4.55, 1.25, -5.95, 2.7, 0.18, 0.62],
-    [4.55, 2.3, -5.95, 2.7, 0.18, 0.62],
-    [4.55, 0.2, -5.95, 2.95, 0.28, 0.75],
-    [3.25, 1.65, -5.95, 0.18, 2.8, 0.72],
-    [5.85, 1.65, -5.95, 0.18, 2.8, 0.72],
+    [7.6, 1.25, -9.95, 2.7, 0.18, 0.62],
+    [7.6, 2.3, -9.95, 2.7, 0.18, 0.62],
+    [7.6, 0.2, -9.95, 2.95, 0.28, 0.75],
+    [6.3, 1.65, -9.95, 0.18, 2.8, 0.72],
+    [8.9, 1.65, -9.95, 0.18, 2.8, 0.72],
   ] as const;
   for (const [x, y, z, sx, sy, sz] of shelfParts) {
     const part = new THREE.Mesh(new THREE.BoxGeometry(sx, sy, sz), wood);
@@ -63,7 +64,7 @@ function addRoomDecor(scene: THREE.Scene) {
   const blockColors = ["#ff8a5b", "#6a8cff", "#ffc857", "#48b8a0"];
   for (let i = 0; i < 4; i++) {
     const block = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.48), roomMaterial(blockColors[i]!));
-    block.position.set(3.7 + i * 0.52, 1.62, -5.55);
+    block.position.set(6.75 + i * 0.52, 1.62, -9.55);
     block.rotation.y = i * 0.22;
     block.castShadow = true;
     decor.add(block);
@@ -74,18 +75,18 @@ function addRoomDecor(scene: THREE.Scene) {
   const fur = roomMaterial("#a96d4b");
   const belly = new THREE.Mesh(new THREE.SphereGeometry(0.52, 24, 16), fur);
   belly.scale.set(0.85, 1.05, 0.65);
-  belly.position.set(4.5, 0.82, -4.95);
+  belly.position.set(7.6, 0.82, -8.95);
   bear.add(belly);
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.48, 24, 16), fur);
-  head.position.set(4.5, 1.55, -4.95);
+  head.position.set(7.6, 1.55, -8.95);
   bear.add(head);
-  for (const [x, y] of [[4.18, 1.88], [4.82, 1.88]] as const) {
+  for (const [x, y] of [[7.28, 1.88], [7.92, 1.88]] as const) {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), fur);
-    ear.position.set(x, y, -4.95);
+    ear.position.set(x, y, -8.95);
     bear.add(ear);
   }
   const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), roomMaterial("#f4c5a2"));
-  muzzle.position.set(4.5, 1.43, -4.52);
+  muzzle.position.set(7.6, 1.43, -8.52);
   bear.add(muzzle);
   bear.traverse((child) => {
     if (child instanceof THREE.Mesh) child.castShadow = true;
@@ -94,7 +95,7 @@ function addRoomDecor(scene: THREE.Scene) {
 
   // Oversized beach ball in the corner.
   const ball = new THREE.Mesh(new THREE.SphereGeometry(0.65, 32, 20), roomMaterial("#ff8a5b", 0.5));
-  ball.position.set(-4.7, 0.68, -4.85);
+  ball.position.set(-7.8, 0.68, -8.95);
   ball.castShadow = true;
   decor.add(ball);
   for (const rotation of [0.3, 2.4, 4.5]) {
@@ -108,24 +109,82 @@ function addRoomDecor(scene: THREE.Scene) {
   const pennantColors = ["#ff8a5b", "#6a8cff", "#ffc857", "#48b8a0", "#e05c6e"];
   for (let i = 0; i < 5; i++) {
     const pennant = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 3), roomMaterial(pennantColors[i]!));
-    pennant.position.set(-2.1 + i * 1.05, 5.55, -6.62);
+    pennant.position.set(-2.1 + i * 1.05, 5.55, -10.62);
     pennant.rotation.set(Math.PI / 2, 0, Math.PI);
     decor.add(pennant);
   }
 
+  // Extra room details: a window, floor cushions, and a small play tent.
+  const windowFrame = roomMaterial("#8bcbd0");
+  const windowGlass = roomMaterial("#bfeaf2", 0.35);
+  const window = new THREE.Mesh(new THREE.BoxGeometry(3.8, 2.3, 0.12), windowGlass);
+  window.position.set(-3.4, 4.15, -10.63);
+  decor.add(window);
+  const windowBars = [
+    new THREE.BoxGeometry(3.95, 0.12, 0.16),
+    new THREE.BoxGeometry(0.12, 2.55, 0.16),
+    new THREE.BoxGeometry(0.1, 2.2, 0.18),
+    new THREE.BoxGeometry(3.7, 0.1, 0.18),
+  ];
+  const windowBarPositions: [number, number][] = [
+    [-3.4, 5.3],
+    [-5.35, 4.15],
+    [-3.4, 4.15],
+    [-3.4, 4.15],
+  ];
+  windowBars.forEach((geometry, i) => {
+    const bar = new THREE.Mesh(geometry, windowFrame);
+    bar.position.set(windowBarPositions[i]![0], windowBarPositions[i]![1], -10.52);
+    decor.add(bar);
+  });
+
+  const cushionColors = ["#f7a8c4", "#9bded0", "#a9bdf5"];
+  for (let i = 0; i < 3; i++) {
+    const cushion = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 12), roomMaterial(cushionColors[i]!));
+    cushion.scale.set(1.35, 0.35, 1.05);
+    cushion.position.set(-7 + i * 1.15, 0.38, -8.2);
+    cushion.castShadow = true;
+    decor.add(cushion);
+  }
+
+  const tent = new THREE.Group();
+  const tentFabric = roomMaterial("#f8c7d8");
+  const tentSide = new THREE.Mesh(new THREE.ConeGeometry(1.55, 2.55, 4), tentFabric);
+  tentSide.position.set(-7.2, 1.25, -4.4);
+  tentSide.rotation.y = Math.PI / 4;
+  tent.add(tentSide);
+  const tentDoor = new THREE.Mesh(new THREE.ConeGeometry(0.52, 1.2, 3), roomMaterial("#fff3df"));
+  tentDoor.position.set(-7.2, 0.85, -5.58);
+  tentDoor.rotation.set(Math.PI / 2, 0, Math.PI);
+  tent.add(tentDoor);
+  tent.traverse((child) => {
+    if (child instanceof THREE.Mesh) child.castShadow = true;
+  });
+  decor.add(tent);
+
   scene.add(decor);
+  return decor;
 }
 
 type Props = {
   objects: SceneObject[];
   selectedId: string | null;
   wireframe: boolean;
+  showEnvironment: boolean;
   resetToken: number;
   onSelect: (id: string | null) => void;
   onMove: (id: string, position: [number, number, number]) => void;
 };
 
-export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect, onMove }: Props) {
+export function Viewer3D({
+  objects,
+  selectedId,
+  wireframe,
+  showEnvironment,
+  resetToken,
+  onSelect,
+  onMove,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
     scene: THREE.Scene;
@@ -133,6 +192,7 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
     renderer: THREE.WebGLRenderer;
     controls: OrbitControls;
     group: THREE.Group;
+    decor: THREE.Group;
   } | null>(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
@@ -149,7 +209,7 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
     scene.background = new THREE.Color("#cfeef4");
 
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 200);
-    camera.position.set(7.4, 5.2, 8.2);
+    camera.position.set(12.5, 7.5, 13.5);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -162,7 +222,7 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.target.set(0, 1.3, -0.4);
+    controls.target.set(0, 1.2, -1.2);
 
     scene.add(new THREE.HemisphereLight("#fffaf2", "#8fbcc5", 1.7));
     const key = new THREE.DirectionalLight("#ffffff", 1.9);
@@ -174,12 +234,12 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
     fill.position.set(-6, 3, -4);
     scene.add(fill);
 
-    addRoomDecor(scene);
+    const decor = addRoomDecor(scene);
 
     const group = new THREE.Group();
     scene.add(group);
 
-    stateRef.current = { scene, camera, renderer, controls, group };
+    stateRef.current = { scene, camera, renderer, controls, group, decor };
 
     const resize = () => {
       const w = host.clientWidth || 1;
@@ -310,10 +370,14 @@ export function Viewer3D({ objects, selectedId, wireframe, resetToken, onSelect,
   useEffect(() => {
     const s = stateRef.current;
     if (!s) return;
-    s.camera.position.set(7.4, 5.2, 8.2);
-    s.controls.target.set(0, 1.3, -0.4);
+    s.camera.position.set(12.5, 7.5, 13.5);
+    s.controls.target.set(0, 1.2, -1.2);
     s.controls.update();
   }, [resetToken]);
+
+  useEffect(() => {
+    if (stateRef.current) stateRef.current.decor.visible = showEnvironment;
+  }, [showEnvironment]);
 
   return <div ref={hostRef} className="h-full w-full" />;
 }

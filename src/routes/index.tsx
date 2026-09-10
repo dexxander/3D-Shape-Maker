@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Download,
+  Eye,
+  EyeOff,
   FilePlus2,
   Grid3x3,
   HeartHandshake,
@@ -74,6 +76,7 @@ function MeshPad() {
   const drawing = useHistory<Stroke[]>([]);
   const [sketchEdits, setSketchEdits] = useState<SketchEdit[]>([]);
   const [wireframe, setWireframe] = useState(false);
+  const [showEnvironment, setShowEnvironment] = useState(true);
   const [resetToken, setResetToken] = useState(0);
   const [projectName, setProjectName] = useState("My first project");
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -427,6 +430,12 @@ function MeshPad() {
                     {wireframe ? "Solid" : "Wireframe"}
                   </HeaderButton>
                   <HeaderButton
+                    onClick={() => setShowEnvironment((visible) => !visible)}
+                    icon={showEnvironment ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  >
+                    {showEnvironment ? "Hide playground" : "Show playground"}
+                  </HeaderButton>
+                  <HeaderButton
                     onClick={() => setResetToken((t) => t + 1)}
                     icon={<RotateCcw className="h-4 w-4" />}
                   >
@@ -440,6 +449,7 @@ function MeshPad() {
                   objects={objects}
                   selectedId={scene.state.selectedId}
                   wireframe={wireframe}
+                  showEnvironment={showEnvironment}
                   resetToken={resetToken}
                   onSelect={(id) =>
                     setScene({ ...scene.state, selectedId: id }, { history: false })
