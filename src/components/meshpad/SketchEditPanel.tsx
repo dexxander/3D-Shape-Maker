@@ -5,14 +5,14 @@ import type { Point, SketchEdit, Vec3 } from "@/lib/meshpad/types";
 type Operation = "add" | "delete";
 
 type Props = {
-  onAdd: (stroke: Point[], rotation: Vec3, depthStroke: boolean) => void;
+  onAdd: (stroke: Point[], rotation: Vec3, depthStroke: boolean, color: string) => void;
   onDelete: (stroke: Point[]) => void;
   onClear: () => void;
   edits: SketchEdit[];
 };
 
-export const SKETCH_WIDTH = 600;
-export const SKETCH_HEIGHT = 360;
+export const SKETCH_WIDTH = 900;
+export const SKETCH_HEIGHT = 540;
 
 function projectPoint(point: Point, rotation: Vec3): Point {
   const centerX = SKETCH_WIDTH / 2;
@@ -214,6 +214,7 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
   const [operation, setOperation] = useState<Operation>("add");
   const [rotation, setRotation] = useState<Vec3>([0, 0, 0]);
   const [stroke, setStroke] = useState<Point[]>([]);
+  const [penColor, setPenColor] = useState("#3e9f70");
   const [depthAnchor, setDepthAnchor] = useState<Point | null>(null);
   const drawing = useRef(false);
   const rotating = useRef(false);
@@ -247,7 +248,9 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
         ctx,
         edit.points,
         rotation,
-        edit.operation === "add" ? "rgba(62, 159, 112, 0.3)" : "rgba(155, 107, 179, 0.3)",
+        edit.operation === "add"
+          ? `${edit.color ?? "#3e9f70"}66`
+          : "rgba(155, 107, 179, 0.3)",
         4,
         false,
         edit.depthStroke,
@@ -257,12 +260,12 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
       ctx,
       stroke,
       rotation,
-      operation === "add" ? "#3e9f70" : "#9b6bb3",
+      operation === "add" ? penColor : "#9b6bb3",
       7,
       true,
       isEdgeOn(rotation),
     );
-  }, [depthAnchor, edits, operation, rotation, stroke]);
+  }, [depthAnchor, edits, operation, penColor, rotation, stroke]);
 
   const screenPointFromEvent = (event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -287,7 +290,7 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
 
   const finish = () => {
     if (stroke.length > 1) {
-      if (operation === "add") onAdd(stroke, rotation, isEdgeOn(rotation));
+      if (operation === "add") onAdd(stroke, rotation, isEdgeOn(rotation), penColor);
       else onDelete(stroke);
     }
     drawing.current = false;
@@ -367,12 +370,66 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
         the plane is edge-on.
       </p>
 
-      <div className="relative mt-4 overflow-hidden rounded-2xl border border-border bg-slate-100">
+      <div className="mt-3 rounded-2xl border border-border bg-background p-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="text-sm font-semibold" htmlFor="sketch-pen-color">
+            Marker color
+          </label>
+          <div
+            className="relative h-9 w-24 overflow-hidden rounded-xl border border-border shadow-inner"
+            style={{
+              background:
+                "linear-gradient(90deg, #fff 0%, transparent 45%), linear-gradient(135deg, #ef4444, #f59e0b, #22c55e, #3b82f6, #8b5cf6, #ec4899)",
+            }}
+          >
+            <input
+              id="sketch-pen-color"
+              type="color"
+              value={penColor}
+              onChange={(event) => setPenColor(event.target.value)}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+              aria-label="Choose marker color"
+            />
+          </div>
+          <span className="rounded-lg border border-border bg-card px-2 py-1 font-mono text-xs uppercase">
+            {penColor}
+          </span>
+          <div className="flex flex-wrap gap-1.5" aria-label="Primary marker colors">
+            {[
+              ["Red", "#ef4444"],
+              ["Yellow", "#f59e0b"],
+              ["Green", "#22c55e"],
+              ["Blue", "#3b82f6"],
+              ["Purple", "#8b5cf6"],
+              ["Pink", "#ec4899"],
+            ].map(([name, color]) => (
+              <button
+                key={color}
+                type="button"
+                onClick={() => setPenColor(color)}
+                aria-label={`Use ${name} marker`}
+                aria-pressed={penColor.toLowerCase() === color}
+                className={`h-7 w-7 rounded-full border-2 transition hover:scale-110 ${
+                  penColor.toLowerCase() === color
+                    ? "border-foreground ring-2 ring-ring/30"
+                    : "border-card"
+                }`}
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Pick any shade from the gradient color control, or choose a primary preset.
+        </p>
+      </div>
+
+      <div className="relative mt-4 min-h-[360px] overflow-hidden rounded-2xl border border-border bg-slate-100 sm:min-h-[520px]">
         <canvas
           ref={canvasRef}
           width={SKETCH_WIDTH}
           height={SKETCH_HEIGHT}
-          className="block aspect-[5/3] w-full touch-none bg-white"
+          className="block h-[360px] w-full touch-none bg-white sm:h-[520px]"
           onPointerDown={(event) => {
             if (event.button === 2) {
               event.preventDefault();
@@ -431,7 +488,7 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <p>Green strokes add geometry. Purple strokes delete nearby generated parts.</p>
+        <p>The selected marker color adds geometry. Purple strokes delete nearby generated parts.</p>
         <p className="font-semibold">
           {edits.length} sketch edit{edits.length === 1 ? "" : "s"} saved for reference
         </p>

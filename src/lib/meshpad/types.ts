@@ -13,6 +13,8 @@ export type SketchEdit = {
   createdAt: number;
   /** True when the stroke was drawn while its sketch plane was edge-on. */
   depthStroke?: boolean;
+  /** Marker color used for an ADD stroke. */
+  color?: string;
 };
 
 export type ShapeKind = "cube" | "sphere" | "cylinder" | "cone" | "extrude" | "sketch";

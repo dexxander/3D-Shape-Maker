@@ -127,13 +127,19 @@ function MeshPad() {
     setProjectId(saved.id);
   };
 
-  const handleSketchAdd = (stroke: Point[], rotation: Vec3, depthStroke: boolean) => {
+  const handleSketchAdd = (
+    stroke: Point[],
+    rotation: Vec3,
+    depthStroke: boolean,
+    color: string,
+  ) => {
     const edit: SketchEdit = {
       id: uid(),
       operation: "add",
       points: stroke,
       createdAt: Date.now(),
       depthStroke,
+      color,
     };
     const nextEdits = [...sketchEdits, edit];
     if (stroke.length < 2) return;
@@ -143,6 +149,7 @@ function MeshPad() {
         sketchPath: stroke,
         thickness: 0.16,
         rotation,
+        color,
       }),
     ];
     const next = [...objects, ...additions];
