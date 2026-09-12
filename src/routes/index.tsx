@@ -61,13 +61,13 @@ export const Route = createFileRoute("/")({
 function starterScene(): SceneState {
   const cube = makeObject("cube", 0);
   cube.name = "Building block";
-  cube.position = [-1.4, 0.6, 0];
+  cube.position = [-1.8, 0.6, 1.4];
   const sphere = makeObject("sphere", 1);
   sphere.name = "Play ball";
-  sphere.position = [1.4, 0.7, 0];
+  sphere.position = [1.8, 0.7, 1.4];
   const cone = makeObject("cone", 3);
   cone.name = "Party hat";
-  cone.position = [0, 0.75, -1.6];
+  cone.position = [0, 0.75, -2.1];
   return { objects: [cube, sphere, cone], selectedId: cube.id };
 }
 

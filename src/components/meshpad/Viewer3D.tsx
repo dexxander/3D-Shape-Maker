@@ -34,17 +34,6 @@ function addRoomDecor(scene: THREE.Scene) {
   sideWall.receiveShadow = true;
   decor.add(sideWall);
 
-  // A low colorful rug keeps the middle open for the shapes the child creates.
-  const rug = new THREE.Mesh(new THREE.BoxGeometry(7.8, 0.08, 5.2), roomMaterial("#fffaf0"));
-  rug.position.set(0.3, 0.02, 0.6);
-  rug.receiveShadow = true;
-  decor.add(rug);
-  for (let i = -3; i <= 3; i++) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.09, 5.26), roomMaterial(["#ff9fb8", "#ffc857", "#8bd3c7"][Math.abs(i) % 3]!));
-    stripe.position.set(0.3 + i * 1.08, 0.08, 0.6);
-    decor.add(stripe);
-  }
-
   // Toy shelf against the back wall.
   const wood = roomMaterial("#d99566");
   const shelfParts = [
