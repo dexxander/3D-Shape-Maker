@@ -1,4 +1,4 @@
-# Shape Maker Studio
+# Shape Maker Studio #
 
 Build a lightweight, responsive browser-based 3D creation app called MeshPad Lite.
 
