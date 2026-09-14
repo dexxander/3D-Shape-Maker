@@ -213,6 +213,16 @@ function addRoomDecor(scene: THREE.Scene) {
   return decor;
 }
 
+function addGridPlane(scene: THREE.Scene) {
+  const grid = new THREE.GridHelper(36, 36, "#8aa7b5", "#c9dce2");
+  grid.name = "editing-grid";
+  grid.position.y = -0.13;
+  grid.material.transparent = true;
+  grid.material.opacity = 0.9;
+  scene.add(grid);
+  return grid;
+}
+
 type Props = {
   objects: SceneObject[];
   selectedId: string | null;
@@ -240,6 +250,7 @@ export function Viewer3D({
     controls: OrbitControls;
     group: THREE.Group;
     decor: THREE.Group;
+    grid: THREE.GridHelper;
   } | null>(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
@@ -265,10 +276,14 @@ export function Viewer3D({
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
     renderer.domElement.style.display = "block";
+    renderer.domElement.style.touchAction = "none";
     renderer.domElement.setAttribute("aria-label", "3D scene viewer");
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.enablePan = true;
+    controls.touches.ONE = THREE.TOUCH.ROTATE;
+    controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
     controls.target.set(0, 1.5, -2.5);
 
     scene.add(new THREE.HemisphereLight("#fffaf2", "#8fbcc5", 1.7));
@@ -282,11 +297,12 @@ export function Viewer3D({
     scene.add(fill);
 
     const decor = addRoomDecor(scene);
+    const grid = addGridPlane(scene);
 
     const group = new THREE.Group();
     scene.add(group);
 
-    stateRef.current = { scene, camera, renderer, controls, group, decor };
+    stateRef.current = { scene, camera, renderer, controls, group, decor, grid };
 
     const resize = () => {
       const w = host.clientWidth || 1;
@@ -316,6 +332,9 @@ export function Viewer3D({
       const id = hit?.object.userData["id"] as string | undefined;
       if (!id) return;
       selectRef.current(id);
+      // Let OrbitControls own touch gestures so one finger rotates and two
+      // fingers dolly/pan instead of starting an object drag.
+      if (e.pointerType === "touch") return;
       draggingId = id;
       controls.enabled = false;
       renderer.domElement.setPointerCapture(e.pointerId);
@@ -423,8 +442,11 @@ export function Viewer3D({
   }, [resetToken]);
 
   useEffect(() => {
-    if (stateRef.current) stateRef.current.decor.visible = showEnvironment;
+    if (stateRef.current) {
+      stateRef.current.decor.visible = showEnvironment;
+      stateRef.current.grid.visible = !showEnvironment;
+    }
   }, [showEnvironment]);
 
-  return <div ref={hostRef} className="h-full w-full" />;
+  return <div ref={hostRef} className="h-full w-full touch-none" />;
 }
