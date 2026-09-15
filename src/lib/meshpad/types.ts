@@ -28,6 +28,18 @@ export type ShapeKind =
 
 export type Vec3 = [number, number, number];
 
+export type CutOperation = {
+  id: string;
+  outline: Point[];
+  holes?: Point[][];
+  depth: number;
+  localTransform: {
+    position: Vec3;
+    rotation: Vec3;
+    scale: Vec3;
+  };
+};
+
 export type SceneObject = {
   id: string;
   name: string;
@@ -38,6 +50,10 @@ export type SceneObject = {
   color: string;
   /** Only for kind === "extrude": outline in canvas pixel space. */
   outline?: Point[];
+  /** Optional array of inner closed outlines representing cut-out holes. */
+  holes?: Point[][];
+  /** Parametric CSG cuts (boolean subtractions) carved into this shape. */
+  cuts?: CutOperation[];
   /** Treat the outline as a radial profile and revolve it around the Y axis. */
   revolve?: boolean;
   /** Canvas size the outline was captured at. */

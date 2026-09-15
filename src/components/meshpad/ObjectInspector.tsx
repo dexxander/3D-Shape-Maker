@@ -204,6 +204,36 @@ export function ObjectInspector({ object, onChange, onCommit, onDuplicate, onDel
           </span>
         </label>
       )}
+
+      {object.holes && object.holes.length > 0 && (
+        <div className="flex items-center justify-between rounded-2xl border border-border p-3 text-sm">
+          <span className="font-semibold text-muted-foreground">Inner Holes</span>
+          <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+            {object.holes.length} {object.holes.length === 1 ? "hole" : "holes"}
+          </span>
+        </div>
+      )}
+
+      {object.cuts && object.cuts.length > 0 && (
+        <div className="flex items-center justify-between rounded-2xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+          <div>
+            <span className="font-semibold text-foreground">Carved Cuts</span>
+            <span className="ml-2 rounded-full bg-destructive/15 px-2 py-0.5 text-xs font-bold text-destructive">
+              {object.cuts.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onChange({ cuts: [] });
+              onCommit();
+            }}
+            className="rounded-xl border border-destructive/40 bg-background px-2.5 py-1 text-xs font-semibold text-destructive hover:bg-destructive/10"
+          >
+            Clear Cuts
+          </button>
+        </div>
+      )}
     </div>
   );
 }

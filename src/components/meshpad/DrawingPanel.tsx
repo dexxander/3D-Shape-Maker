@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Eraser, Pencil, Redo2, Trash2, Undo2, Shapes } from "lucide-react";
 import type { Point, Stroke } from "@/lib/meshpad/types";
 import { uid } from "@/lib/meshpad/types";
-import { isClosedOutline } from "@/lib/meshpad/geometry";
+import { isClosedOutline, isOutlineInside, snapToAngle } from "@/lib/meshpad/geometry";
 
 export const CANVAS_SIZE = 600;
 
@@ -13,7 +13,7 @@ type Props = {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
-  onExtrude: (outline: Point[]) => void;
+  onExtrude: (outline: Point[], holes?: Point[][]) => void;
   title?: string;
   description?: string;
   actionLabel?: string;
@@ -40,6 +40,31 @@ function eraseAt(strokes: Stroke[], p: Point): Stroke[] {
   return out;
 }
 
+function getStrokeBounds(pts: Point[]) {
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  return { minX, maxX, minY, maxY, area: Math.max(1, (maxX - minX) * (maxY - minY)) };
+}
+
+function analyzeStrokes(strokesList: Stroke[]) {
+  const closed = strokesList.filter((s) => isClosedOutline(s.points, CANVAS_SIZE));
+  if (closed.length === 0) return { outer: null, holes: [] as Stroke[] };
+  const sorted = [...closed].sort((a, b) => {
+    return getStrokeBounds(b.points).area - getStrokeBounds(a.points).area;
+  });
+  const outer = sorted[0]!;
+  const holes = sorted.slice(1).filter((s) => isOutlineInside(s.points, outer.points));
+  return { outer, holes };
+}
+
 export function DrawingPanel({
   strokes,
   onStrokesChange,
@@ -56,8 +81,26 @@ export function DrawingPanel({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<"draw" | "erase">("draw");
   const [error, setError] = useState<string | null>(null);
+  const [shiftHeld, setShiftHeld] = useState(false);
   const drawing = useRef(false);
   const liveStroke = useRef<Point[]>([]);
+  const anchorPointRef = useRef<Point | null>(null);
+  const lastSnapAngleRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setShiftHeld(true);
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") setShiftHeld(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   const paint = useCallback((list: Stroke[]) => {
     const canvas = canvasRef.current;
@@ -77,19 +120,70 @@ export function DrawingPanel({
       ctx.stroke();
     }
 
+    const { outer, holes } = analyzeStrokes(list);
+    const holeIds = new Set(holes.map((h) => h.id));
+
+    // Render hole shapes with distinct cutout style
+    for (const hole of holes) {
+      if (hole.points.length < 2) continue;
+      ctx.fillStyle = "rgba(224, 242, 254, 0.6)";
+      ctx.beginPath();
+      ctx.moveTo(hole.points[0]!.x, hole.points[0]!.y);
+      for (const p of hole.points.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.save();
+      ctx.setLineDash([8, 6]);
+      ctx.strokeStyle = "#0284c7";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Render standard strokes & live stroke
     ctx.strokeStyle = "#e0393e";
     ctx.lineWidth = 6;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    const all = liveStroke.current.length
-      ? [...list, { id: "live", points: liveStroke.current }]
-      : list;
-    for (const s of all) {
-      if (s.points.length < 2) continue;
+
+    for (const s of list) {
+      if (holeIds.has(s.id) || s.points.length < 2) continue;
       ctx.beginPath();
       ctx.moveTo(s.points[0]!.x, s.points[0]!.y);
       for (const p of s.points.slice(1)) ctx.lineTo(p.x, p.y);
       ctx.stroke();
+    }
+
+    if (liveStroke.current.length >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(liveStroke.current[0]!.x, liveStroke.current[0]!.y);
+      for (const p of liveStroke.current.slice(1)) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+
+      // If angle snapping with shift, draw a dashed guide ray
+      if (anchorPointRef.current && lastSnapAngleRef.current !== null) {
+        const last = liveStroke.current[liveStroke.current.length - 1]!;
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "#3b82f6";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(anchorPointRef.current.x, anchorPointRef.current.y);
+        ctx.lineTo(last.x, last.y);
+        ctx.stroke();
+
+        ctx.fillStyle = "#1e293b";
+        ctx.beginPath();
+        ctx.roundRect(last.x + 12, last.y - 12, 48, 22, 6);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(`${lastSnapAngleRef.current}°`, last.x + 36, last.y - 1);
+        ctx.restore();
+      }
     }
   }, []);
 
@@ -113,6 +207,8 @@ export function DrawingPanel({
     if (tool === "erase") {
       onStrokesChange(eraseAt(strokes, p));
     } else {
+      anchorPointRef.current = p;
+      lastSnapAngleRef.current = null;
       liveStroke.current = [p];
       paint(strokes);
     }
@@ -120,10 +216,19 @@ export function DrawingPanel({
 
   const handleMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!drawing.current) return;
-    const p = toCanvas(e);
+    let p = toCanvas(e);
     if (tool === "erase") {
       onStrokesChange(eraseAt(strokes, p), { history: false });
       return;
+    }
+    const isShift = e.shiftKey || shiftHeld;
+    if (isShift && anchorPointRef.current) {
+      const snapped = snapToAngle(p, anchorPointRef.current, 45);
+      p = snapped.point;
+      lastSnapAngleRef.current = snapped.angleDegrees;
+    } else {
+      anchorPointRef.current = p;
+      lastSnapAngleRef.current = null;
     }
     const last = liveStroke.current[liveStroke.current.length - 1];
     if (last && Math.hypot(p.x - last.x, p.y - last.y) < 2.5) return;
@@ -134,20 +239,19 @@ export function DrawingPanel({
   const handleUp = () => {
     if (!drawing.current) return;
     drawing.current = false;
+    anchorPointRef.current = null;
+    lastSnapAngleRef.current = null;
     if (tool === "draw" && liveStroke.current.length > 2) {
       onStrokesChange([...strokes, { id: uid(), points: liveStroke.current }]);
     }
     liveStroke.current = [];
   };
 
-  const longest = strokes.reduce<Stroke | null>(
-    (best, s) => (!best || s.points.length > best.points.length ? s : best),
-    null,
-  );
-  const closed = !!longest && isClosedOutline(longest.points, CANVAS_SIZE);
+  const { outer, holes } = analyzeStrokes(strokes);
+  const closed = !!outer && isClosedOutline(outer.points, CANVAS_SIZE);
 
   const handleExtrude = () => {
-    if (!longest) {
+    if (!outer) {
       setError("Draw a shape first — try a circle, a star or a heart.");
       return;
     }
@@ -156,7 +260,10 @@ export function DrawingPanel({
       return;
     }
     setError(null);
-    onExtrude(longest.points);
+    onExtrude(
+      outer.points,
+      holes.map((h) => h.points),
+    );
   };
 
   return (
@@ -166,13 +273,24 @@ export function DrawingPanel({
           <h2 className="font-display truncate text-xl">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        <span
-          className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
-            closed ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
-          }`}
-        >
-          {closed ? "Closed ✓" : "Open outline"}
-        </span>
+        <div className="flex items-center gap-2">
+          {shiftHeld && (
+            <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-semibold text-primary">
+              Shift: 45° Snap ON
+            </span>
+          )}
+          <span
+            className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
+              closed ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {closed
+              ? holes.length > 0
+                ? `Closed ✓ (${holes.length} Hole${holes.length > 1 ? "s" : ""})`
+                : "Closed ✓"
+              : "Open outline"}
+          </span>
+        </div>
       </header>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -215,6 +333,11 @@ export function DrawingPanel({
             </div>
           </div>
         )}
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-1 px-1 text-xs text-muted-foreground">
+        <span>💡 Hold <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground">Shift</kbd> to snap lines to 45°/90°</span>
+        <span>Draw inside a shape to cut holes</span>
       </div>
 
       {error && (

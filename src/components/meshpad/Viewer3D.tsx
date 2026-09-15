@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { Pencil, Trash2, X } from "lucide-react";
-import type { SceneObject, Point } from "@/lib/meshpad/types";
-import { buildGeometry } from "@/lib/meshpad/geometry";
+import type { SceneObject, Point, CutOperation } from "@/lib/meshpad/types";
+import { buildGeometry, snapToAngle } from "@/lib/meshpad/geometry";
 
 const roomMaterial = (color: string, roughness = 0.72) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
@@ -293,6 +293,7 @@ type Props = {
       name?: string;
     },
   ) => void;
+  onCut3D?: (targetId: string, cut: CutOperation) => void;
   onSelect: (id: string | null) => void;
   onMove: (id: string, position: [number, number, number]) => void;
   onDepthChange: (id: string, depth: number) => void;
@@ -308,6 +309,7 @@ export function Viewer3D({
   draw3D = false,
   onToggleDraw3D,
   onExtrude3D,
+  onCut3D,
   onSelect,
   onMove,
   onDepthChange,
@@ -338,7 +340,46 @@ export function Viewer3D({
   draw3DRef.current = draw3D;
   const extrude3DRef = useRef(onExtrude3D);
   extrude3DRef.current = onExtrude3D;
+  const cut3DRef = useRef(onCut3D);
+  cut3DRef.current = onCut3D;
   const drawStateRef = useRef<Draw3DState | null>(null);
+
+  // Drawing action: "extend" (adds material outwards) vs "cut" (carves material inward)
+  const [drawAction, setDrawAction] = useState<"extend" | "cut">("extend");
+  const drawActionRef = useRef<"extend" | "cut">("extend");
+  drawActionRef.current = drawAction;
+
+  // Shift-key angle snapping state
+  const shiftHeldRef = useRef(false);
+  const [shiftActive, setShiftActive] = useState(false);
+  const drawAnchorRef = useRef<Point | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "Shift") {
+        shiftHeldRef.current = true;
+        setShiftActive(true);
+      }
+      if (e.key === "c" || e.key === "C") {
+        if (draw3DRef.current) {
+          setDrawAction((prev) => (prev === "extend" ? "cut" : "extend"));
+        }
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === "Shift") {
+        shiftHeldRef.current = false;
+        setShiftActive(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   // HUD state for 3D drawing mode
   const [hudCoords, setHudCoords] = useState<{ x: number; y: number } | null>(null);
@@ -530,17 +571,20 @@ export function Viewer3D({
           drawState.surfacePoint = null;
         }
 
-        // Position start marker at this exact point (unmissable red sphere + ring + pin)
+        // Position start marker at this exact point
         drawState.startMarkerGroup.position.set(localPt.x, localPt.y, 0.03);
         drawState.startMarkerGroup.scale.set(1, 1, 1);
         drawState.startMarkerGroup.visible = true;
 
-        drawState.startMarkerSphere.material.color.set("#ff3b30");
-        drawState.startMarkerRing.material.color.set("#ff3b30");
-        drawState.startMarkerPin.material.color.set("#ff3b30");
+        const isCutMode = drawActionRef.current === "cut";
+        const markerCol = isCutMode ? "#ef4444" : "#ff3b30";
+        drawState.startMarkerSphere.material.color.set(markerCol);
+        drawState.startMarkerRing.material.color.set(markerCol);
+        drawState.startMarkerPin.material.color.set(markerCol);
 
         drawState.startPoint = { x: localPt.x, y: localPt.y };
         drawState.points = [{ x: localPt.x, y: localPt.y }];
+        drawAnchorRef.current = { x: localPt.x, y: localPt.y };
         drawState.isDrawing = true;
         drawState.isClosed = false;
 
@@ -554,7 +598,9 @@ export function Viewer3D({
         const targetName = drawState.surfaceObject?.name;
         setHudStatus(
           targetName
-            ? `Drawing on ${targetName}... bring line back to start marker to close & extend.`
+            ? isCutMode
+              ? `Drawing cut on ${targetName}... bring line back to start marker to close & carve.`
+              : `Drawing on ${targetName}... bring line back to start marker to close & extend.`
             : "Drawing... bring line back to start marker to close.",
         );
         setIsClosing(false);
@@ -590,6 +636,8 @@ export function Viewer3D({
         pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(pointer, camera);
 
+        const isCutMode = drawActionRef.current === "cut";
+
         if (!drawState.isDrawing) {
           // Hovering: detect if pointer is over any 3D mesh to show surface reticle
           const meshHits = raycaster.intersectObjects(
@@ -608,9 +656,23 @@ export function Viewer3D({
 
             drawState.surfaceCursorGroup.visible = true;
             drawState.surfaceCursorGroup.position.copy(hit.point.clone().addScaledVector(worldNormal, 0.02));
-            drawState.surfaceCursorGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), worldNormal);
+            // In cut mode, direction cone points inward into shape
+            drawState.surfaceCursorGroup.quaternion.setFromUnitVectors(
+              new THREE.Vector3(0, 0, 1),
+              isCutMode ? worldNormal.clone().negate() : worldNormal,
+            );
 
-            setHudStatus(`Hovering on ${targetObj?.name ?? "3D shape"} — click to draw & extend from this surface`);
+            drawState.surfaceCursorGroup.traverse((child) => {
+              if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+                child.material.color.set(isCutMode ? "#ef4444" : "#3b82f6");
+              }
+            });
+
+            setHudStatus(
+              isCutMode
+                ? `[CUT MODE] Hovering on ${targetObj?.name ?? "3D shape"} — click to carve cut into surface`
+                : `Hovering on ${targetObj?.name ?? "3D shape"} — click to draw & extend from this surface`,
+            );
             return;
           } else {
             drawState.surfaceCursorGroup.visible = false;
@@ -620,7 +682,21 @@ export function Viewer3D({
         const hits = raycaster.intersectObject(drawState.planeMesh, false);
         if (hits.length > 0) {
           const hit = hits[0]!;
-          const localPt = drawState.planeMesh.worldToLocal(hit.point.clone());
+          const rawLocal = drawState.planeMesh.worldToLocal(hit.point.clone());
+          let localPt = rawLocal;
+
+          const isShift = e.shiftKey || shiftHeldRef.current;
+          let snapAngle: number | null = null;
+          if (isShift && drawAnchorRef.current) {
+            const snapped = snapToAngle(
+              { x: rawLocal.x, y: rawLocal.y },
+              drawAnchorRef.current,
+              45,
+            );
+            localPt = new THREE.Vector3(snapped.point.x, snapped.point.y, rawLocal.z);
+            snapAngle = snapped.angleDegrees;
+          }
+
           setHudCoords({ x: localPt.x, y: localPt.y });
 
           if (drawState.isDrawing && drawState.startPoint) {
@@ -630,6 +706,9 @@ export function Viewer3D({
               drawState.points.push({ x: localPt.x, y: localPt.y });
               updateStrokeLine(drawState);
               setStrokeLength(drawState.points.length);
+              if (!isShift) {
+                drawAnchorRef.current = { x: localPt.x, y: localPt.y };
+              }
             }
 
             // Check closure distance against start point (proportional to plane size, points >= 12)
@@ -646,14 +725,25 @@ export function Viewer3D({
                 drawState.startMarkerRing.material.color.set("#22c55e");
                 drawState.startMarkerPin.material.color.set("#22c55e");
                 drawState.startMarkerGroup.scale.set(1.3, 1.3, 1.3);
-                setHudStatus("Release to close shape and extend!");
+                setHudStatus(
+                  isCutMode
+                    ? "Release to close shape and carve cut!"
+                    : "Release to close shape and extend!",
+                );
               } else {
-                drawState.startMarkerSphere.material.color.set("#ff3b30");
-                drawState.startMarkerRing.material.color.set("#ff3b30");
-                drawState.startMarkerPin.material.color.set("#ff3b30");
+                const markerColor = isCutMode ? "#ef4444" : "#ff3b30";
+                drawState.startMarkerSphere.material.color.set(markerColor);
+                drawState.startMarkerRing.material.color.set(markerColor);
+                drawState.startMarkerPin.material.color.set(markerColor);
                 drawState.startMarkerGroup.scale.set(1, 1, 1);
-                setHudStatus("Drawing... bring line back to the red start marker to close.");
+                setHudStatus(
+                  isShift && snapAngle !== null
+                    ? `[Shift Snap ${snapAngle}°] Bring line back to start marker to close.`
+                    : "Drawing... bring line back to the red start marker to close.",
+                );
               }
+            } else if (isShift && snapAngle !== null && !closed) {
+              setHudStatus(`[Shift Snap ${snapAngle}°] Bring line back to start marker to close.`);
             }
           }
         } else if (!drawState.isDrawing) {
@@ -673,6 +763,7 @@ export function Viewer3D({
     };
 
     const onDragEnd = (e: PointerEvent) => {
+      drawAnchorRef.current = null;
       if (draw3DRef.current && drawStateRef.current?.isDrawing) {
         drawStateRef.current.isDrawing = false;
         try {
@@ -687,6 +778,7 @@ export function Viewer3D({
     };
 
     const onUp = (e: PointerEvent) => {
+      drawAnchorRef.current = null;
       // ── 3D Drawing Mode: release handling ──
       if (draw3DRef.current && drawStateRef.current) {
         const drawState = drawStateRef.current;
@@ -726,21 +818,62 @@ export function Viewer3D({
             const h = Math.max(maxY - minY, 0.3);
             const s = Math.max(0.2, Math.max(w, h) / 2);
 
-            // Center of extrusion: offset by DEPTH / 2 + bevel along +Z so base sits flush against the face
-            const BEVEL = 0.04;
-            const centerLocal = new THREE.Vector3(cx, cy, DEPTH / 2 + BEVEL);
-            const worldCenter = drawState.planeGroup.localToWorld(centerLocal);
-            const euler = new THREE.Euler().setFromQuaternion(drawState.planeGroup.quaternion, "XYZ");
+            const isCutMode = drawActionRef.current === "cut";
+            const targetObj = drawState.surfaceObject;
+            const targetMesh = drawState.surfaceMesh;
 
-            const parentName = drawState.surfaceObject?.name ?? "3D shape";
-            extrude3DRef.current?.(outline, {
-              position: [worldCenter.x, worldCenter.y, worldCenter.z],
-              rotation: [euler.x, euler.y, euler.z],
-              scale: [s, s, 1],
-              name: `Extension of ${parentName}`,
-            });
+            if (isCutMode && targetObj && targetMesh) {
+              const CUT_DEPTH = 0.8;
+              // Center of cutter in plane local space: penetrate inward into the shape along -Z
+              const centerLocal = new THREE.Vector3(cx, cy, -CUT_DEPTH / 2 + 0.02);
+              const worldCenter = drawState.planeGroup.localToWorld(centerLocal);
+              const worldQuat = drawState.planeGroup.quaternion.clone();
 
-            setHudStatus(`Extended ${parentName}! Hover any 3D shape to draw & extend again, or click Exit.`);
+              // Express cutter in parent mesh local space:
+              targetMesh.updateMatrixWorld(true);
+              const cutterWorldMatrix = new THREE.Matrix4().compose(
+                worldCenter,
+                worldQuat,
+                new THREE.Vector3(s, s, 1),
+              );
+              const cutterLocalMatrix = targetMesh.matrixWorld.clone().invert().multiply(cutterWorldMatrix);
+
+              const localPos = new THREE.Vector3();
+              const localQuat = new THREE.Quaternion();
+              const localScale = new THREE.Vector3();
+              cutterLocalMatrix.decompose(localPos, localQuat, localScale);
+              const localEuler = new THREE.Euler().setFromQuaternion(localQuat, "XYZ");
+
+              const cutOp: CutOperation = {
+                id: Math.random().toString(36).slice(2, 10),
+                outline,
+                depth: CUT_DEPTH,
+                localTransform: {
+                  position: [localPos.x, localPos.y, localPos.z],
+                  rotation: [localEuler.x, localEuler.y, localEuler.z],
+                  scale: [localScale.x, localScale.y, localScale.z],
+                },
+              };
+
+              cut3DRef.current?.(targetObj.id, cutOp);
+              setHudStatus(`Carved cut into ${targetObj.name}! Draw again to add more cuts, or toggle Extend.`);
+            } else {
+              // Center of extrusion: offset by DEPTH / 2 + bevel along +Z so base sits flush against the face
+              const BEVEL = 0.04;
+              const centerLocal = new THREE.Vector3(cx, cy, DEPTH / 2 + BEVEL);
+              const worldCenter = drawState.planeGroup.localToWorld(centerLocal);
+              const euler = new THREE.Euler().setFromQuaternion(drawState.planeGroup.quaternion, "XYZ");
+
+              const parentName = drawState.surfaceObject?.name ?? "3D shape";
+              extrude3DRef.current?.(outline, {
+                position: [worldCenter.x, worldCenter.y, worldCenter.z],
+                rotation: [euler.x, euler.y, euler.z],
+                scale: [s, s, 1],
+                name: `Extension of ${parentName}`,
+              });
+
+              setHudStatus(`Extended ${parentName}! Hover any 3D shape to draw & extend again, or click Exit.`);
+            }
           } else {
             // Free-space drawing
             extrude3DRef.current?.(outline);
@@ -752,7 +885,7 @@ export function Viewer3D({
           setStrokeLength(0);
         } else {
           // Stroke did NOT close
-          setHudStatus("Your outline isn't closed yet. Bring the line back to the red start marker.");
+          setHudStatus("Your outline isn't closed yet. Bring the line back to the start marker.");
           setIsClosing(false);
         }
         return;
@@ -1167,6 +1300,41 @@ export function Viewer3D({
               <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-md">
                 <Pencil className="h-3.5 w-3.5" /> 3D Drawing Mode
               </span>
+
+              {/* Action Toggle: Extend vs Cut */}
+              <div className="pointer-events-auto flex items-center rounded-xl border border-border bg-background/90 p-0.5 shadow-sm backdrop-blur">
+                <button
+                  type="button"
+                  onClick={() => setDrawAction("extend")}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                    drawAction === "extend"
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Extend: adds material outwards (Hotkey: C)"
+                >
+                  Extend ⇗
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDrawAction("cut")}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
+                    drawAction === "cut"
+                      ? "bg-destructive text-destructive-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                  title="Cut: carves material inward (Hotkey: C)"
+                >
+                  Cut ⇘
+                </button>
+              </div>
+
+              {shiftActive && (
+                <span className="rounded-full bg-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary backdrop-blur">
+                  Shift: 45° Snap ON
+                </span>
+              )}
+
               {hudCoords && (
                 <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-0.5 text-xs font-mono font-semibold text-foreground shadow-sm backdrop-blur">
                   X: {hudCoords.x.toFixed(2)} · Y: {hudCoords.y.toFixed(2)}
@@ -1195,18 +1363,23 @@ export function Viewer3D({
           </div>
 
           {/* Bottom Guidance Pill */}
-          <div className="flex justify-center">
+          <div className="flex flex-col items-center gap-1">
             <div
               className={`rounded-2xl px-4 py-2 text-center text-xs font-semibold shadow-md backdrop-blur transition-all ${
                 isClosing
                   ? "border border-success/50 bg-success text-success-foreground scale-105"
                   : hudStatus.includes("isn't closed")
                     ? "border border-destructive/50 bg-destructive text-destructive-foreground"
-                    : "border border-border/80 bg-background/90 text-foreground"
+                    : drawAction === "cut"
+                      ? "border border-destructive/40 bg-background/95 text-destructive"
+                      : "border border-border/80 bg-background/90 text-foreground"
               }`}
             >
               {hudStatus}
             </div>
+            <p className="text-[11px] text-muted-foreground/80 font-medium">
+              Hold <kbd className="rounded border bg-background/80 px-1 py-0.5 font-mono text-[10px]">Shift</kbd> to snap angles · Press <kbd className="rounded border bg-background/80 px-1 py-0.5 font-mono text-[10px]">C</kbd> to toggle Extend/Cut
+            </p>
           </div>
         </div>
       )}

@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import type { Point, SceneObject, ShapeKind } from "./types";
+import { Evaluator, Brush, SUBTRACTION } from "three-bvh-csg";
+import type { CutOperation, Point, SceneObject, ShapeKind } from "./types";
 import { uid } from "./types";
 
 export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -7,6 +8,55 @@ export const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 export function isClosedOutline(points: Point[], canvasSize: number): boolean {
   if (points.length < 12) return false;
   return dist(points[0]!, points[points.length - 1]!) <= canvasSize * 0.14;
+}
+
+export function isPointInPolygon(p: Point, polygon: Point[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i]!.x,
+      yi = polygon[i]!.y;
+    const xj = polygon[j]!.x,
+      yj = polygon[j]!.y;
+    const intersect =
+      yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+export function isOutlineInside(inner: Point[], outer: Point[]): boolean {
+  if (inner.length === 0 || outer.length === 0) return false;
+  let insideCount = 0;
+  const step = Math.max(1, Math.floor(inner.length / 8));
+  let sampled = 0;
+  for (let i = 0; i < inner.length; i += step) {
+    sampled++;
+    if (isPointInPolygon(inner[i]!, outer)) insideCount++;
+  }
+  return insideCount > sampled / 2;
+}
+
+export function snapToAngle(
+  current: Point,
+  anchor: Point,
+  stepDegrees = 45,
+): { point: Point; angleDegrees: number } {
+  const dx = current.x - anchor.x;
+  const dy = current.y - anchor.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 4) return { point: current, angleDegrees: 0 };
+  const radStep = (stepDegrees * Math.PI) / 180;
+  const rawAngle = Math.atan2(dy, dx);
+  const snappedRad = Math.round(rawAngle / radStep) * radStep;
+  let deg = Math.round((snappedRad * 180) / Math.PI);
+  if (deg < 0) deg += 360;
+  return {
+    point: {
+      x: anchor.x + length * Math.cos(snappedRad),
+      y: anchor.y + length * Math.sin(snappedRad),
+    },
+    angleDegrees: deg,
+  };
 }
 
 export function simplify(points: Point[], maxPoints = 160): Point[] {
@@ -35,11 +85,49 @@ function normalizedOutline(points: Point[]) {
   return pts.map((p) => new THREE.Vector2((p.x - cx) * scale, -(p.y - cy) * scale));
 }
 
-export function outlineToShape(points: Point[], size: { width: number; height: number }) {
-  const pts = normalizedOutline(points);
+export function outlineToShape(
+  points: Point[],
+  size: { width: number; height: number },
+  holes?: Point[][],
+) {
+  const pts = simplify(points);
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const p of pts) {
+    minX = Math.min(minX, p.x);
+    maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  const scale = 2 / Math.max(maxX - minX, maxY - minY, 1);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
   const shape = new THREE.Shape();
-  pts.forEach((p, i) => (i === 0 ? shape.moveTo(p.x, p.y) : shape.lineTo(p.x, p.y)));
+  pts.forEach((p, i) => {
+    const v = new THREE.Vector2((p.x - cx) * scale, -(p.y - cy) * scale);
+    if (i === 0) shape.moveTo(v.x, v.y);
+    else shape.lineTo(v.x, v.y);
+  });
   shape.closePath();
+
+  if (holes && holes.length > 0) {
+    for (const hole of holes) {
+      const hPts = simplify(hole);
+      if (hPts.length < 3) continue;
+      const holePath = new THREE.Path();
+      hPts.forEach((p, i) => {
+        const v = new THREE.Vector2((p.x - cx) * scale, -(p.y - cy) * scale);
+        if (i === 0) holePath.moveTo(v.x, v.y);
+        else holePath.lineTo(v.x, v.y);
+      });
+      holePath.closePath();
+      shape.holes.push(holePath);
+    }
+  }
+
   void size;
   return shape;
 }
@@ -255,35 +343,89 @@ export function buildMultiViewGeometry(
   return geometry;
 }
 
+const csgEvaluator = new Evaluator();
+csgEvaluator.useGroups = false;
+
+export function applyCuts(
+  baseGeo: THREE.BufferGeometry,
+  cuts?: CutOperation[],
+): THREE.BufferGeometry {
+  if (!cuts || cuts.length === 0) return baseGeo;
+
+  let currentGeo = baseGeo;
+  for (const cut of cuts) {
+    try {
+      const cutterShape = outlineToShape(
+        cut.outline,
+        { width: 600, height: 600 },
+        cut.holes,
+      );
+      const cutterGeo = new THREE.ExtrudeGeometry(cutterShape, {
+        depth: cut.depth,
+        bevelEnabled: false,
+      });
+      cutterGeo.center();
+
+      const baseBrush = new Brush(currentGeo);
+      baseBrush.updateMatrixWorld(true);
+
+      const cutterBrush = new Brush(cutterGeo);
+      cutterBrush.position.set(...cut.localTransform.position);
+      cutterBrush.rotation.set(...cut.localTransform.rotation);
+      cutterBrush.scale.set(...cut.localTransform.scale);
+      cutterBrush.updateMatrixWorld(true);
+
+      const result = csgEvaluator.evaluate(baseBrush, cutterBrush, SUBTRACTION);
+      if (result && result.geometry) {
+        currentGeo = result.geometry;
+        currentGeo.computeVertexNormals();
+      }
+    } catch (err) {
+      console.warn("Failed to apply CSG cut:", err);
+    }
+  }
+  return currentGeo;
+}
+
 export function buildGeometry(object: SceneObject): THREE.BufferGeometry {
+  let geo: THREE.BufferGeometry;
   switch (object.kind) {
     case "cube":
-      return new THREE.BoxGeometry(1, 1, 1);
+      geo = new THREE.BoxGeometry(1, 1, 1);
+      break;
     case "sphere":
-      return new THREE.SphereGeometry(0.65, 40, 28);
+      geo = new THREE.SphereGeometry(0.65, 40, 28);
+      break;
     case "cylinder":
-      return new THREE.CylinderGeometry(0.5, 0.5, 1.2, 40);
+      geo = new THREE.CylinderGeometry(0.5, 0.5, 1.2, 40);
+      break;
     case "cone":
-      return new THREE.ConeGeometry(0.6, 1.3, 40);
+      geo = new THREE.ConeGeometry(0.6, 1.3, 40);
+      break;
     case "sketch":
-      return buildSketchGeometry(object.sketchPath ?? [], object.thickness ?? 0.16);
+      geo = buildSketchGeometry(object.sketchPath ?? [], object.thickness ?? 0.16);
+      break;
     case "multiview": {
-      const geo = buildMultiViewGeometry(object.frontOutline ?? [], object.sideOutline ?? []);
+      geo = buildMultiViewGeometry(object.frontOutline ?? [], object.sideOutline ?? []);
       geo.center();
-      return geo;
+      break;
     }
     case "extrude": {
-      if (!object.outline || object.outline.length < 3) return new THREE.BoxGeometry(1, 1, 1);
+      if (!object.outline || object.outline.length < 3) {
+        geo = new THREE.BoxGeometry(1, 1, 1);
+        break;
+      }
       if (object.revolve) {
-        const geo = buildLatheGeometry(object.outline);
+        geo = buildLatheGeometry(object.outline);
         geo.center();
-        return geo;
+        break;
       }
       const shape = outlineToShape(
         object.outline,
         object.outlineSize ?? { width: 600, height: 600 },
+        object.holes,
       );
-      const geo = new THREE.ExtrudeGeometry(shape, {
+      geo = new THREE.ExtrudeGeometry(shape, {
         depth: object.depth ?? 0.4,
         bevelEnabled: true,
         bevelThickness: 0.04,
@@ -292,9 +434,10 @@ export function buildGeometry(object: SceneObject): THREE.BufferGeometry {
         curveSegments: 6,
       });
       geo.center();
-      return geo;
+      break;
     }
   }
+  return applyCuts(geo, object.cuts);
 }
 
 const PALETTE = ["#ff8a5b", "#48b8a0", "#6a8cff", "#ffc857", "#e05c6e", "#8f7bd8"];

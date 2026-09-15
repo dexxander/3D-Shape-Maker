@@ -27,6 +27,7 @@ import { makeObject } from "@/lib/meshpad/geometry";
 import { downloadText, toOBJ, toSTL } from "@/lib/meshpad/exporters";
 import { lastProjectId, loadProject, saveProject } from "@/lib/meshpad/storage";
 import type {
+  CutOperation,
   Point,
   SceneObject,
   SceneState,
@@ -216,10 +217,12 @@ function MeshPad() {
         scale?: [number, number, number];
         name?: string;
       },
+      holes?: Point[][],
     ) => {
       const object = makeObject("extrude", objects.length, {
         name: transform?.name ?? `3D Extrusion ${objects.length + 1}`,
         outline,
+        ...(holes && holes.length > 0 ? { holes } : {}),
         outlineSize: { width: 600, height: 600 },
         depth: 0.5,
         revolve: false,
@@ -231,6 +234,25 @@ function MeshPad() {
       setScene({ objects: next, selectedId: object.id });
       persistSnapshot({ objects: next, selectedId: object.id }, sketchEdits);
       setStatus(`Added ${object.name} to the scene`);
+    },
+    [objects, setScene, sketchEdits],
+  );
+
+  const handleCut3D = useCallback(
+    (targetId: string, cut: CutOperation) => {
+      const target = objects.find((o) => o.id === targetId);
+      if (!target) return;
+      const next = objects.map((o) =>
+        o.id === targetId
+          ? {
+              ...o,
+              cuts: [...(o.cuts ?? []), cut],
+            }
+          : o,
+      );
+      setScene({ objects: next, selectedId: targetId });
+      persistSnapshot({ objects: next, selectedId: targetId }, sketchEdits);
+      setStatus(`Carved cut into ${target.name}`);
     },
     [objects, setScene, sketchEdits],
   );
@@ -513,6 +535,7 @@ function MeshPad() {
                   draw3D={draw3D}
                   onToggleDraw3D={setDraw3D}
                   onExtrude3D={handleExtrude3D}
+                  onCut3D={handleCut3D}
                   onSelect={(id) =>
                     setScene({ ...scene.state, selectedId: id }, { history: false })
                   }
