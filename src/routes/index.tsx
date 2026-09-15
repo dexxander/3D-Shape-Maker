@@ -14,9 +14,11 @@ import {
   Trash2,
   Undo2,
   Redo2,
+  Pencil,
 } from "lucide-react";
 import { Viewer3D } from "@/components/meshpad/Viewer3D";
 import { SketchEditPanel, SKETCH_HEIGHT, SKETCH_WIDTH } from "@/components/meshpad/SketchEditPanel";
+import { MultiViewPanel } from "@/components/meshpad/multiviewpanel";
 import { ShapeLibrary } from "@/components/meshpad/ShapeLibrary";
 import { ObjectInspector } from "@/components/meshpad/ObjectInspector";
 import { Onboarding } from "@/components/meshpad/Onboarding";
@@ -77,6 +79,7 @@ function MeshPad() {
   const [sketchEdits, setSketchEdits] = useState<SketchEdit[]>([]);
   const [wireframe, setWireframe] = useState(false);
   const [showEnvironment, setShowEnvironment] = useState(true);
+  const [draw3D, setDraw3D] = useState(false);
   const [resetToken, setResetToken] = useState(0);
   const [projectName, setProjectName] = useState("My first project");
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -191,6 +194,46 @@ function MeshPad() {
     persistSnapshot(nextScene, nextEdits);
     setStatus(`Deleted ${removed} mesh part${removed === 1 ? "" : "s"}.`);
   };
+
+  const handleMultiViewBuild = (frontOutline: Point[], sideOutline: Point[]) => {
+    const object = makeObject("multiview", objects.length, {
+      name: `Sculpted shape ${objects.length + 1}`,
+      frontOutline,
+      sideOutline,
+    });
+    const next = [...objects, object];
+    setScene({ objects: next, selectedId: object.id });
+    persistSnapshot({ objects: next, selectedId: object.id }, sketchEdits);
+    setStatus("Built a 3D shape from your front + side sketches.");
+  };
+
+  const handleExtrude3D = useCallback(
+    (
+      outline: Point[],
+      transform?: {
+        position?: [number, number, number];
+        rotation?: [number, number, number];
+        scale?: [number, number, number];
+        name?: string;
+      },
+    ) => {
+      const object = makeObject("extrude", objects.length, {
+        name: transform?.name ?? `3D Extrusion ${objects.length + 1}`,
+        outline,
+        outlineSize: { width: 600, height: 600 },
+        depth: 0.5,
+        revolve: false,
+        position: transform?.position ?? [0, 1.2, 0],
+        rotation: transform?.rotation ?? [0, 0, 0],
+        scale: transform?.scale ?? [1, 1, 1],
+      });
+      const next = [...objects, object];
+      setScene({ objects: next, selectedId: object.id });
+      persistSnapshot({ objects: next, selectedId: object.id }, sketchEdits);
+      setStatus(`Added ${object.name} to the scene`);
+    },
+    [objects, setScene, sketchEdits],
+  );
 
   const patchSelected = (patch: Partial<SceneObject>, history = false) => {
     if (!selected) return;
@@ -402,6 +445,8 @@ function MeshPad() {
               edits={sketchEdits}
             />
 
+            <MultiViewPanel onBuild={handleMultiViewBuild} />
+
             <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
               <h2 className="font-display text-xl">2. Add building blocks</h2>
               <p className="mb-3 text-sm text-muted-foreground">
@@ -448,6 +493,13 @@ function MeshPad() {
                   >
                     Reset view
                   </HeaderButton>
+                  <HeaderButton
+                    onClick={() => setDraw3D((d) => !d)}
+                    icon={<Pencil className="h-4 w-4" />}
+                    primary={draw3D}
+                  >
+                    {draw3D ? "Exit 3D drawing" : "Draw in 3D"}
+                  </HeaderButton>
                 </div>
               </div>
 
@@ -458,6 +510,9 @@ function MeshPad() {
                   wireframe={wireframe}
                   showEnvironment={showEnvironment}
                   resetToken={resetToken}
+                  draw3D={draw3D}
+                  onToggleDraw3D={setDraw3D}
+                  onExtrude3D={handleExtrude3D}
                   onSelect={(id) =>
                     setScene({ ...scene.state, selectedId: id }, { history: false })
                   }
@@ -472,6 +527,18 @@ function MeshPad() {
                       { history: false },
                     )
                   }
+                  onDepthChange={(id, depth) =>
+                    setScene(
+                      {
+                        ...scene.state,
+                        objects: objects.map((object) =>
+                          object.id === id ? { ...object, depth } : object,
+                        ),
+                      },
+                      { history: false },
+                    )
+                  }
+                  onCommitDepth={commit}
                 />
                 {objects.length === 0 && (
                   <div className="pointer-events-none absolute inset-0 grid place-items-center px-6 text-center">

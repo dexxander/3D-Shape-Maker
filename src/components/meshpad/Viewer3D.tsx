@@ -1,7 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { SceneObject } from "@/lib/meshpad/types";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
+import { Pencil, Trash2, X } from "lucide-react";
+import type { SceneObject, Point } from "@/lib/meshpad/types";
 import { buildGeometry } from "@/lib/meshpad/geometry";
 
 const roomMaterial = (color: string, roughness = 0.72) =>
@@ -223,14 +225,78 @@ function addGridPlane(scene: THREE.Scene) {
   return grid;
 }
 
+const PLANE_SIZE = 12;
+
+type Draw3DState = {
+  planeGroup: THREE.Group;
+  planeMesh: THREE.Mesh;
+  startMarkerGroup: THREE.Group;
+  startMarkerSphere: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  startMarkerRing: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+  startMarkerPin: THREE.Mesh<THREE.CylinderGeometry, THREE.MeshBasicMaterial>;
+  strokeLine: THREE.Line;
+  hintSprite: THREE.Sprite;
+  surfaceCursorGroup: THREE.Group;
+  surfaceMesh: THREE.Mesh | null;
+  surfaceObject: SceneObject | null;
+  surfaceNormal: THREE.Vector3 | null;
+  surfacePoint: THREE.Vector3 | null;
+  points: { x: number; y: number }[];
+  isDrawing: boolean;
+  startPoint: { x: number; y: number } | null;
+  isClosed: boolean;
+};
+
+function updateStrokeLine(drawState: Draw3DState) {
+  const positions = new Float32Array(drawState.points.length * 3);
+  for (let i = 0; i < drawState.points.length; i++) {
+    positions[i * 3] = drawState.points[i]!.x;
+    positions[i * 3 + 1] = drawState.points[i]!.y;
+    positions[i * 3 + 2] = 0.025;
+  }
+  drawState.strokeLine.geometry.dispose();
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  drawState.strokeLine.geometry = geo;
+}
+
+function resetDrawStroke(drawState: Draw3DState) {
+  drawState.points = [];
+  drawState.startPoint = null;
+  drawState.isDrawing = false;
+  drawState.isClosed = false;
+  drawState.surfaceMesh = null;
+  drawState.surfaceObject = null;
+  drawState.surfaceNormal = null;
+  drawState.surfacePoint = null;
+  drawState.startMarkerGroup.visible = false;
+  drawState.startMarkerGroup.scale.set(1, 1, 1);
+  drawState.hintSprite.visible = true;
+  drawState.strokeLine.geometry.dispose();
+  drawState.strokeLine.geometry = new THREE.BufferGeometry();
+}
+
 type Props = {
   objects: SceneObject[];
   selectedId: string | null;
   wireframe: boolean;
   showEnvironment: boolean;
   resetToken: number;
+  draw3D?: boolean;
+  onToggleDraw3D?: (active: boolean) => void;
+  onExtrude3D?: (
+    outline: Point[],
+    transform?: {
+      position?: [number, number, number];
+      rotation?: [number, number, number];
+      scale?: [number, number, number];
+      name?: string;
+    },
+  ) => void;
   onSelect: (id: string | null) => void;
   onMove: (id: string, position: [number, number, number]) => void;
+  onDepthChange: (id: string, depth: number) => void;
+  onCommitDepth: () => void;
 };
 
 export function Viewer3D({
@@ -239,8 +305,13 @@ export function Viewer3D({
   wireframe,
   showEnvironment,
   resetToken,
+  draw3D = false,
+  onToggleDraw3D,
+  onExtrude3D,
   onSelect,
   onMove,
+  onDepthChange,
+  onCommitDepth,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const stateRef = useRef<{
@@ -256,8 +327,33 @@ export function Viewer3D({
   selectRef.current = onSelect;
   const moveRef = useRef(onMove);
   moveRef.current = onMove;
+  const depthChangeRef = useRef(onDepthChange);
+  depthChangeRef.current = onDepthChange;
+  const commitDepthRef = useRef(onCommitDepth);
+  commitDepthRef.current = onCommitDepth;
   const objectsRef = useRef(objects);
   objectsRef.current = objects;
+
+  const draw3DRef = useRef(draw3D);
+  draw3DRef.current = draw3D;
+  const extrude3DRef = useRef(onExtrude3D);
+  extrude3DRef.current = onExtrude3D;
+  const drawStateRef = useRef<Draw3DState | null>(null);
+
+  // HUD state for 3D drawing mode
+  const [hudCoords, setHudCoords] = useState<{ x: number; y: number } | null>(null);
+  const [hudStatus, setHudStatus] = useState<string>("Click & drag on the grid to start drawing");
+  const [isClosing, setIsClosing] = useState<boolean>(false);
+  const [strokeLength, setStrokeLength] = useState<number>(0);
+
+  // TransformControls instance — created in init useEffect, used in mesh-rebuild useEffect
+  const tcRef = useRef<{
+    tc: TransformControls;
+    helper: THREE.Object3D;
+    anchor: THREE.Object3D;
+  } | null>(null);
+  // Tracks which object the depth handle is targeting (shared between useEffects)
+  const depthObjectIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -304,6 +400,59 @@ export function Viewer3D({
 
     stateRef.current = { scene, camera, renderer, controls, group, decor, grid };
 
+    // ── Depth handle: TransformControls constrained to Z-axis ──────
+    const tc = new TransformControls(camera, renderer.domElement);
+    tc.setMode("translate");
+    tc.showX = false;
+    tc.showY = false;
+    // showZ stays true — only the Z arrow is visible
+    tc.setSpace("local");
+    tc.setSize(0.7);
+
+    const tcHelper = tc.getHelper();
+    tcHelper.visible = false; // hidden until an extrude object is selected
+    scene.add(tcHelper);
+
+    const anchor = new THREE.Object3D();
+    anchor.name = "depth-handle-anchor";
+    scene.add(anchor);
+
+    // Drag state for depth handle
+    let depthDragStartZ = 0;
+    let depthDragStartDepth = 0;
+
+    tc.addEventListener("dragging-changed", (event) => {
+      const dragging = !!event.value;
+      controls.enabled = !dragging;
+      if (dragging) {
+        // Drag started — record starting state
+        depthDragStartZ = anchor.position.z;
+        const id = depthObjectIdRef.current;
+        const obj = id ? objectsRef.current.find((o) => o.id === id) : null;
+        depthDragStartDepth = obj?.depth ?? 0.4;
+      } else {
+        // Drag ended — commit to undo history
+        if (depthObjectIdRef.current) {
+          commitDepthRef.current();
+        }
+      }
+    });
+
+    tc.addEventListener("change", () => {
+      const id = depthObjectIdRef.current;
+      if (!tc.dragging || !id) return;
+      // Clamp anchor to only Z movement
+      const obj = objectsRef.current.find((o) => o.id === id);
+      if (!obj) return;
+      anchor.position.x = obj.position[0];
+      anchor.position.y = obj.position[1];
+      const zDelta = anchor.position.z - depthDragStartZ;
+      const newDepth = Math.max(0.05, Math.min(10, depthDragStartDepth + zDelta));
+      depthChangeRef.current(id, newDepth);
+    });
+
+    tcRef.current = { tc, helper: tcHelper, anchor };
+
     const resize = () => {
       const w = host.clientWidth || 1;
       const h = host.clientHeight || 1;
@@ -320,7 +469,99 @@ export function Viewer3D({
     let downAt = { x: 0, y: 0 };
     let draggingId: string | null = null;
     const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.8);
+
     const onDown = (e: PointerEvent) => {
+      // ── 3D Drawing Mode: left-click starts stroke on 3D shape or plane ──
+      if (draw3DRef.current && drawStateRef.current) {
+        if (e.button !== 0) return; // Allow right-click through to OrbitControls for rotation
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+
+        const drawState = drawStateRef.current;
+
+        // Check if user clicked directly on any existing 3D mesh in the scene
+        const meshHits = raycaster.intersectObjects(
+          group.children.filter((c) => c instanceof THREE.Mesh),
+          false,
+        );
+
+        let localPt: THREE.Vector3;
+
+        if (meshHits.length > 0) {
+          const hit = meshHits[0]!;
+          const hitMesh = hit.object as THREE.Mesh;
+          const objId = hitMesh.userData["id"] as string | undefined;
+          const targetObj = objectsRef.current.find((o) => o.id === objId) ?? null;
+
+          // Compute surface normal in world space
+          const worldNormal = hit.face
+            ? hit.face.normal.clone().transformDirection(hitMesh.matrixWorld).normalize()
+            : new THREE.Vector3(0, 1, 0);
+
+          // Anchor drawing plane directly to the clicked face of the 3D shape!
+          drawState.planeGroup.position.copy(hit.point);
+          drawState.planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), worldNormal);
+          drawState.planeGroup.updateMatrixWorld(true);
+
+          drawState.surfaceMesh = hitMesh;
+          drawState.surfaceObject = targetObj;
+          drawState.surfaceNormal = worldNormal.clone();
+          drawState.surfacePoint = hit.point.clone();
+
+          // On this anchored plane, the click point is at local origin (0, 0)
+          localPt = new THREE.Vector3(0, 0, 0);
+        } else {
+          // Clicked in free space: re-align plane to face camera if needed
+          const target = controls.target.clone();
+          drawState.planeGroup.position.copy(target);
+          drawState.planeGroup.lookAt(camera.position);
+          drawState.planeGroup.updateMatrixWorld(true);
+
+          const hits = raycaster.intersectObject(drawState.planeMesh, false);
+          if (hits.length === 0) return;
+          const hit = hits[0]!;
+          localPt = drawState.planeMesh.worldToLocal(hit.point.clone());
+
+          drawState.surfaceMesh = null;
+          drawState.surfaceObject = null;
+          drawState.surfaceNormal = null;
+          drawState.surfacePoint = null;
+        }
+
+        // Position start marker at this exact point (unmissable red sphere + ring + pin)
+        drawState.startMarkerGroup.position.set(localPt.x, localPt.y, 0.03);
+        drawState.startMarkerGroup.scale.set(1, 1, 1);
+        drawState.startMarkerGroup.visible = true;
+
+        drawState.startMarkerSphere.material.color.set("#ff3b30");
+        drawState.startMarkerRing.material.color.set("#ff3b30");
+        drawState.startMarkerPin.material.color.set("#ff3b30");
+
+        drawState.startPoint = { x: localPt.x, y: localPt.y };
+        drawState.points = [{ x: localPt.x, y: localPt.y }];
+        drawState.isDrawing = true;
+        drawState.isClosed = false;
+
+        drawState.hintSprite.visible = false;
+        drawState.surfaceCursorGroup.visible = false;
+        updateStrokeLine(drawState);
+
+        renderer.domElement.setPointerCapture(e.pointerId);
+
+        setHudCoords({ x: localPt.x, y: localPt.y });
+        const targetName = drawState.surfaceObject?.name;
+        setHudStatus(
+          targetName
+            ? `Drawing on ${targetName}... bring line back to start marker to close & extend.`
+            : "Drawing... bring line back to start marker to close.",
+        );
+        setIsClosing(false);
+        setStrokeLength(1);
+        return;
+      }
+
       downAt = { x: e.clientX, y: e.clientY };
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -339,7 +580,88 @@ export function Viewer3D({
       controls.enabled = false;
       renderer.domElement.setPointerCapture(e.pointerId);
     };
+
     const onMove = (e: PointerEvent) => {
+      // ── 3D Drawing Mode: hover detection on 3D meshes & stroke drawing ──
+      if (draw3DRef.current && drawStateRef.current) {
+        const drawState = drawStateRef.current;
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+
+        if (!drawState.isDrawing) {
+          // Hovering: detect if pointer is over any 3D mesh to show surface reticle
+          const meshHits = raycaster.intersectObjects(
+            group.children.filter((c) => c instanceof THREE.Mesh),
+            false,
+          );
+
+          if (meshHits.length > 0) {
+            const hit = meshHits[0]!;
+            const hitMesh = hit.object as THREE.Mesh;
+            const objId = hitMesh.userData["id"] as string | undefined;
+            const targetObj = objectsRef.current.find((o) => o.id === objId);
+            const worldNormal = hit.face
+              ? hit.face.normal.clone().transformDirection(hitMesh.matrixWorld).normalize()
+              : new THREE.Vector3(0, 1, 0);
+
+            drawState.surfaceCursorGroup.visible = true;
+            drawState.surfaceCursorGroup.position.copy(hit.point.clone().addScaledVector(worldNormal, 0.02));
+            drawState.surfaceCursorGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), worldNormal);
+
+            setHudStatus(`Hovering on ${targetObj?.name ?? "3D shape"} — click to draw & extend from this surface`);
+            return;
+          } else {
+            drawState.surfaceCursorGroup.visible = false;
+          }
+        }
+
+        const hits = raycaster.intersectObject(drawState.planeMesh, false);
+        if (hits.length > 0) {
+          const hit = hits[0]!;
+          const localPt = drawState.planeMesh.worldToLocal(hit.point.clone());
+          setHudCoords({ x: localPt.x, y: localPt.y });
+
+          if (drawState.isDrawing && drawState.startPoint) {
+            const last = drawState.points[drawState.points.length - 1];
+            const dLast = last ? Math.hypot(localPt.x - last.x, localPt.y - last.y) : Infinity;
+            if (dLast >= 0.04) {
+              drawState.points.push({ x: localPt.x, y: localPt.y });
+              updateStrokeLine(drawState);
+              setStrokeLength(drawState.points.length);
+            }
+
+            // Check closure distance against start point (proportional to plane size, points >= 12)
+            const dStart = Math.hypot(localPt.x - drawState.startPoint.x, localPt.y - drawState.startPoint.y);
+            const closeThreshold = PLANE_SIZE * 0.14;
+            const closed = drawState.points.length >= 12 && dStart <= closeThreshold;
+
+            if (closed !== drawState.isClosed) {
+              drawState.isClosed = closed;
+              setIsClosing(closed);
+              if (closed) {
+                // Change marker color to green to indicate "release here to close"
+                drawState.startMarkerSphere.material.color.set("#22c55e");
+                drawState.startMarkerRing.material.color.set("#22c55e");
+                drawState.startMarkerPin.material.color.set("#22c55e");
+                drawState.startMarkerGroup.scale.set(1.3, 1.3, 1.3);
+                setHudStatus("Release to close shape and extend!");
+              } else {
+                drawState.startMarkerSphere.material.color.set("#ff3b30");
+                drawState.startMarkerRing.material.color.set("#ff3b30");
+                drawState.startMarkerPin.material.color.set("#ff3b30");
+                drawState.startMarkerGroup.scale.set(1, 1, 1);
+                setHudStatus("Drawing... bring line back to the red start marker to close.");
+              }
+            }
+          }
+        } else if (!drawState.isDrawing) {
+          setHudCoords(null);
+        }
+        return;
+      }
+
       if (!draggingId) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -349,12 +671,93 @@ export function Viewer3D({
       const current = objectsRef.current.find((object) => object.id === draggingId);
       if (point && current) moveRef.current(draggingId, [point.x, current.position[1], point.z]);
     };
+
     const onDragEnd = (e: PointerEvent) => {
+      if (draw3DRef.current && drawStateRef.current?.isDrawing) {
+        drawStateRef.current.isDrawing = false;
+        try {
+          renderer.domElement.releasePointerCapture(e.pointerId);
+        } catch {}
+        setIsClosing(false);
+        return;
+      }
       if (draggingId) renderer.domElement.releasePointerCapture(e.pointerId);
       draggingId = null;
       controls.enabled = true;
     };
+
     const onUp = (e: PointerEvent) => {
+      // ── 3D Drawing Mode: release handling ──
+      if (draw3DRef.current && drawStateRef.current) {
+        const drawState = drawStateRef.current;
+        if (!drawState.isDrawing) return;
+
+        drawState.isDrawing = false;
+        try {
+          renderer.domElement.releasePointerCapture(e.pointerId);
+        } catch {}
+
+        if (drawState.isClosed && drawState.points.length >= 12 && drawState.startPoint) {
+          // Closed outline! Connect back to exact start point
+          const closedPoints = [...drawState.points, { ...drawState.startPoint }];
+
+          // Coordinate conversion: map local (x, y) to outline format.
+          // In plane local space, Y is positive upwards. In 2D canvas space, Y is positive downwards.
+          // Inverting Y ensures the extruded geometry is oriented upright as drawn.
+          const outline: Point[] = closedPoints.map((p) => ({
+            x: p.x,
+            y: -p.y,
+          }));
+
+          const DEPTH = 0.5;
+
+          if (drawState.surfaceMesh && drawState.surfaceNormal) {
+            // Calculate bounding box of the drawn points on the surface
+            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            for (const pt of closedPoints) {
+              minX = Math.min(minX, pt.x);
+              maxX = Math.max(maxX, pt.x);
+              minY = Math.min(minY, pt.y);
+              maxY = Math.max(maxY, pt.y);
+            }
+            const cx = (minX + maxX) / 2;
+            const cy = (minY + maxY) / 2;
+            const w = Math.max(maxX - minX, 0.3);
+            const h = Math.max(maxY - minY, 0.3);
+            const s = Math.max(0.2, Math.max(w, h) / 2);
+
+            // Center of extrusion: offset by DEPTH / 2 + bevel along +Z so base sits flush against the face
+            const BEVEL = 0.04;
+            const centerLocal = new THREE.Vector3(cx, cy, DEPTH / 2 + BEVEL);
+            const worldCenter = drawState.planeGroup.localToWorld(centerLocal);
+            const euler = new THREE.Euler().setFromQuaternion(drawState.planeGroup.quaternion, "XYZ");
+
+            const parentName = drawState.surfaceObject?.name ?? "3D shape";
+            extrude3DRef.current?.(outline, {
+              position: [worldCenter.x, worldCenter.y, worldCenter.z],
+              rotation: [euler.x, euler.y, euler.z],
+              scale: [s, s, 1],
+              name: `Extension of ${parentName}`,
+            });
+
+            setHudStatus(`Extended ${parentName}! Hover any 3D shape to draw & extend again, or click Exit.`);
+          } else {
+            // Free-space drawing
+            extrude3DRef.current?.(outline);
+            setHudStatus("Shape extruded! Hover any 3D shape to draw on it, or click Exit.");
+          }
+
+          resetDrawStroke(drawState);
+          setIsClosing(false);
+          setStrokeLength(0);
+        } else {
+          // Stroke did NOT close
+          setHudStatus("Your outline isn't closed yet. Bring the line back to the red start marker.");
+          setIsClosing(false);
+        }
+        return;
+      }
+
       if (draggingId) {
         onDragEnd(e);
         return;
@@ -367,6 +770,7 @@ export function Viewer3D({
       const hit = raycaster.intersectObjects(group.children, false)[0];
       selectRef.current(hit ? ((hit.object.userData["id"] as string) ?? null) : null);
     };
+
     renderer.domElement.addEventListener("pointerdown", onDown);
     renderer.domElement.addEventListener("pointermove", onMove);
     renderer.domElement.addEventListener("pointerup", onUp);
@@ -387,6 +791,38 @@ export function Viewer3D({
       renderer.domElement.removeEventListener("pointermove", onMove);
       renderer.domElement.removeEventListener("pointerup", onUp);
       renderer.domElement.removeEventListener("pointercancel", onDragEnd);
+
+      // Clean up 3D drawing state if active
+      if (drawStateRef.current) {
+        const { planeGroup, surfaceCursorGroup } = drawStateRef.current;
+        scene.remove(planeGroup);
+        scene.remove(surfaceCursorGroup);
+        surfaceCursorGroup.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry?.dispose();
+            (child.material as THREE.Material)?.dispose();
+          }
+        });
+        planeGroup.traverse((child) => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Sprite) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose());
+            } else {
+              child.material?.dispose();
+            }
+          }
+        });
+        drawStateRef.current = null;
+      }
+
+      // Clean up depth handle
+      tc.detach();
+      tc.dispose();
+      scene.remove(tcHelper);
+      scene.remove(anchor);
+      tcRef.current = null;
+      depthObjectIdRef.current = null;
       controls.dispose();
       renderer.dispose();
       host.removeChild(renderer.domElement);
@@ -431,7 +867,279 @@ export function Viewer3D({
         s.group.add(box as unknown as THREE.Object3D);
       }
     });
+
+    // ── Depth handle visibility & positioning ──────────────────
+    const tcState = tcRef.current;
+    if (tcState) {
+      const selectedObj = selectedId
+        ? objects.find((o) => o.id === selectedId)
+        : null;
+
+      if (!draw3DRef.current && selectedObj && selectedObj.kind === "extrude") {
+        const depth = selectedObj.depth ?? 0.4;
+        // Position anchor at the object's position, offset along Z by the full depth
+        // (front face of the extrusion in local space)
+        tcState.anchor.position.set(
+          selectedObj.position[0],
+          selectedObj.position[1],
+          selectedObj.position[2] + depth,
+        );
+        tcState.anchor.rotation.set(...selectedObj.rotation);
+        // Don't re-attach during an active drag — it would reset the anchor
+        if (!tcState.tc.dragging) {
+          tcState.tc.attach(tcState.anchor);
+        }
+        tcState.helper.visible = true;
+        depthObjectIdRef.current = selectedObj.id;
+      } else {
+        tcState.tc.detach();
+        tcState.helper.visible = false;
+        depthObjectIdRef.current = null;
+      }
+    }
   }, [objects, selectedId, wireframe]);
+
+  // ── Manage 3D drawing plane lifecycle ───────────────────────
+  useEffect(() => {
+    const s = stateRef.current;
+    if (!s) return;
+    const { scene, camera, controls } = s;
+
+    if (draw3D) {
+      // Disable left-click orbit so left-drag draws on plane
+      controls.mouseButtons.LEFT = null;
+      // Allow right-click to orbit while in drawing mode
+      controls.mouseButtons.RIGHT = THREE.MOUSE.ROTATE;
+
+      // Hide TransformControls depth helper while in drawing mode
+      if (tcRef.current) {
+        tcRef.current.tc.detach();
+        tcRef.current.helper.visible = false;
+      }
+
+      const planeGroup = new THREE.Group();
+      planeGroup.name = "draw3d-group";
+
+      // Position plane at controls.target and billboard facing camera
+      const target = controls.target.clone();
+      planeGroup.position.copy(target);
+      planeGroup.lookAt(camera.position);
+
+      // Semi-transparent drawing plane surface
+      const planeGeo = new THREE.PlaneGeometry(PLANE_SIZE, PLANE_SIZE);
+      const planeMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.12,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const planeMesh = new THREE.Mesh(planeGeo, planeMat);
+      planeMesh.name = "draw3d-plane-surface";
+      planeGroup.add(planeMesh);
+
+      // Visible grid for scale and alignment reference
+      const grid = new THREE.GridHelper(PLANE_SIZE, 24, 0x3b82f6, 0x93c5fd);
+      grid.rotation.x = Math.PI / 2;
+      grid.position.z = 0.002;
+      if (Array.isArray(grid.material)) {
+        grid.material.forEach((m) => {
+          m.transparent = true;
+          m.opacity = 0.75;
+        });
+      } else {
+        grid.material.transparent = true;
+        grid.material.opacity = 0.75;
+      }
+      planeGroup.add(grid);
+
+      // Border outline around drawing plane
+      const borderGeo = new THREE.EdgesGeometry(planeGeo);
+      const borderMat = new THREE.LineBasicMaterial({
+        color: 0x3b82f6,
+        transparent: true,
+        opacity: 0.85,
+        linewidth: 2,
+      });
+      const border = new THREE.LineSegments(borderGeo, borderMat);
+      border.position.z = 0.003;
+      planeGroup.add(border);
+
+      // Start marker group: sphere + ring highlight + pin
+      const startMarkerGroup = new THREE.Group();
+      startMarkerGroup.visible = false;
+      startMarkerGroup.position.z = 0.03;
+      startMarkerGroup.renderOrder = 10;
+
+      const sphereGeo = new THREE.SphereGeometry(0.12, 24, 16);
+      const sphereMat = new THREE.MeshBasicMaterial({ color: 0xff3b30, depthTest: false });
+      const startMarkerSphere = new THREE.Mesh(sphereGeo, sphereMat);
+      startMarkerGroup.add(startMarkerSphere);
+
+      const ringGeo = new THREE.RingGeometry(0.18, 0.25, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xff3b30,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9,
+        depthTest: false,
+      });
+      const startMarkerRing = new THREE.Mesh(ringGeo, ringMat);
+      startMarkerGroup.add(startMarkerRing);
+
+      const pinGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.5, 12);
+      const pinMat = new THREE.MeshBasicMaterial({ color: 0xff3b30, depthTest: false });
+      const startMarkerPin = new THREE.Mesh(pinGeo, pinMat);
+      startMarkerPin.rotation.x = Math.PI / 2;
+      startMarkerPin.position.z = 0.25;
+      startMarkerGroup.add(startMarkerPin);
+
+      planeGroup.add(startMarkerGroup);
+
+      // Dynamic stroke line
+      const lineGeo = new THREE.BufferGeometry();
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0xe0393e,
+        linewidth: 3,
+        depthTest: false,
+      });
+      const strokeLine = new THREE.Line(lineGeo, lineMat);
+      strokeLine.position.z = 0.025;
+      strokeLine.renderOrder = 9;
+      planeGroup.add(strokeLine);
+
+      // In-scene billboard text sprite for initial guidance
+      const labelCanvas = document.createElement("canvas");
+      labelCanvas.width = 512;
+      labelCanvas.height = 128;
+      const ctx = labelCanvas.getContext("2d")!;
+      ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+      ctx.beginPath();
+      ctx.roundRect(16, 16, 480, 96, 24);
+      ctx.fill();
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 28px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Click & drag to start drawing", 256, 64);
+      const labelTexture = new THREE.CanvasTexture(labelCanvas);
+      const spriteMat = new THREE.SpriteMaterial({ map: labelTexture, transparent: true });
+      const hintSprite = new THREE.Sprite(spriteMat);
+      hintSprite.scale.set(3.2, 0.8, 1);
+      hintSprite.position.set(0, PLANE_SIZE / 2 + 0.55, 0.05);
+      planeGroup.add(hintSprite);
+
+      scene.add(planeGroup);
+
+      // 3D Surface hover reticle (ring + center dot + normal pointer)
+      const surfaceCursorGroup = new THREE.Group();
+      surfaceCursorGroup.name = "draw3d-surface-cursor";
+      surfaceCursorGroup.visible = false;
+      surfaceCursorGroup.renderOrder = 20;
+
+      const cursorRingGeo = new THREE.RingGeometry(0.18, 0.26, 32);
+      const cursorRingMat = new THREE.MeshBasicMaterial({
+        color: 0x3b82f6,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9,
+        depthTest: false,
+      });
+      const cursorRing = new THREE.Mesh(cursorRingGeo, cursorRingMat);
+      surfaceCursorGroup.add(cursorRing);
+
+      const cursorDotGeo = new THREE.SphereGeometry(0.04, 16, 12);
+      const cursorDotMat = new THREE.MeshBasicMaterial({
+        color: 0x60a5fa,
+        depthTest: false,
+      });
+      const cursorDot = new THREE.Mesh(cursorDotGeo, cursorDotMat);
+      surfaceCursorGroup.add(cursorDot);
+
+      const cursorConeGeo = new THREE.ConeGeometry(0.06, 0.28, 16);
+      const cursorConeMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        depthTest: false,
+      });
+      const cursorCone = new THREE.Mesh(cursorConeGeo, cursorConeMat);
+      cursorCone.rotation.x = Math.PI / 2;
+      cursorCone.position.z = 0.14;
+      surfaceCursorGroup.add(cursorCone);
+
+      scene.add(surfaceCursorGroup);
+
+      drawStateRef.current = {
+        planeGroup,
+        planeMesh,
+        startMarkerGroup,
+        startMarkerSphere,
+        startMarkerRing,
+        startMarkerPin,
+        strokeLine,
+        hintSprite,
+        surfaceCursorGroup,
+        surfaceMesh: null,
+        surfaceObject: null,
+        surfaceNormal: null,
+        surfacePoint: null,
+        points: [],
+        isDrawing: false,
+        startPoint: null,
+        isClosed: false,
+      };
+
+      setHudCoords(null);
+      setHudStatus("Click & drag on the grid to start drawing");
+      setIsClosing(false);
+      setStrokeLength(0);
+    } else {
+      if (drawStateRef.current) {
+        const { planeGroup, surfaceCursorGroup } = drawStateRef.current;
+        scene.remove(planeGroup);
+        scene.remove(surfaceCursorGroup);
+        surfaceCursorGroup.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose());
+            } else {
+              child.material?.dispose();
+            }
+          }
+        });
+        planeGroup.traverse((child) => {
+          if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Sprite) {
+            child.geometry?.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m) => m.dispose());
+            } else {
+              child.material?.dispose();
+            }
+          }
+        });
+        drawStateRef.current = null;
+      }
+      controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+      controls.mouseButtons.RIGHT = THREE.MOUSE.PAN;
+      setHudCoords(null);
+      setHudStatus("Click & drag on the grid to start drawing");
+      setIsClosing(false);
+      setStrokeLength(0);
+    }
+  }, [draw3D]);
+
+  const handleClearStroke = useCallback(() => {
+    if (drawStateRef.current) {
+      resetDrawStroke(drawStateRef.current);
+      setHudCoords(null);
+      setHudStatus("Click & drag on the grid to start drawing");
+      setIsClosing(false);
+      setStrokeLength(0);
+    }
+  }, []);
 
   useEffect(() => {
     const s = stateRef.current;
@@ -448,5 +1156,60 @@ export function Viewer3D({
     }
   }, [showEnvironment]);
 
-  return <div ref={hostRef} className="h-full w-full touch-none" />;
+  return (
+    <div ref={hostRef} className="relative h-full w-full touch-none">
+      {/* 3D Drawing HUD Overlay */}
+      {draw3D && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3.5 select-none">
+          {/* Top Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-bold uppercase tracking-wider text-primary-foreground shadow-md">
+                <Pencil className="h-3.5 w-3.5" /> 3D Drawing Mode
+              </span>
+              {hudCoords && (
+                <span className="rounded-full border border-border/80 bg-background/90 px-2.5 py-0.5 text-xs font-mono font-semibold text-foreground shadow-sm backdrop-blur">
+                  X: {hudCoords.x.toFixed(2)} · Y: {hudCoords.y.toFixed(2)}
+                </span>
+              )}
+            </div>
+
+            <div className="pointer-events-auto flex items-center gap-1.5">
+              {strokeLength > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearStroke}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm backdrop-blur transition hover:bg-muted"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onToggleDraw3D?.(false)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background/90 px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm backdrop-blur transition hover:bg-muted"
+              >
+                <X className="h-3.5 w-3.5" /> Exit
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Guidance Pill */}
+          <div className="flex justify-center">
+            <div
+              className={`rounded-2xl px-4 py-2 text-center text-xs font-semibold shadow-md backdrop-blur transition-all ${
+                isClosing
+                  ? "border border-success/50 bg-success text-success-foreground scale-105"
+                  : hudStatus.includes("isn't closed")
+                    ? "border border-destructive/50 bg-destructive text-destructive-foreground"
+                    : "border border-border/80 bg-background/90 text-foreground"
+              }`}
+            >
+              {hudStatus}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

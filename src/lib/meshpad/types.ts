@@ -17,7 +17,14 @@ export type SketchEdit = {
   color?: string;
 };
 
-export type ShapeKind = "cube" | "sphere" | "cylinder" | "cone" | "extrude" | "sketch";
+export type ShapeKind =
+  | "cube"
+  | "sphere"
+  | "cylinder"
+  | "cone"
+  | "extrude"
+  | "sketch"
+  | "multiview";
 
 export type Vec3 = [number, number, number];
 
@@ -40,6 +47,20 @@ export type SceneObject = {
   sketchPath?: Point[];
   sketchCenter?: Point;
   thickness?: number;
+  /**
+   * Only for kind === "multiview": the front-facing outline (drawn on the
+   * "Front" canvas). Its horizontal extent at each height defines the
+   * object's WIDTH at that height. Shares the vertical (Y) axis with
+   * sideOutline — both must be captured on canvases of the same pixel
+   * height so the two views line up.
+   */
+  frontOutline?: Point[];
+  /**
+   * Only for kind === "multiview": the side-facing outline (drawn on the
+   * "Side" canvas). Its horizontal extent at each height defines the
+   * object's DEPTH at that height.
+   */
+  sideOutline?: Point[];
 };
 
 export type SceneState = {

@@ -183,6 +183,27 @@ export function ObjectInspector({ object, onChange, onCommit, onDuplicate, onDel
           </span>
         </label>
       )}
+
+      {object.kind === "extrude" && (
+        <label className="grid grid-cols-[auto_minmax(0,1fr)_3rem] items-center gap-3 rounded-2xl border border-border p-3 text-sm font-semibold">
+          <span>Depth</span>
+          <input
+            type="range"
+            min="0.05"
+            max="10"
+            step="0.05"
+            value={object.depth ?? 0.4}
+            onChange={(event) => onChange({ depth: Number(event.target.value) })}
+            onPointerUp={onCommit}
+            onKeyUp={onCommit}
+            className="w-full accent-[var(--primary)]"
+            aria-label="Extrusion depth"
+          />
+          <span className="text-right text-xs tabular-nums text-muted-foreground">
+            {(object.depth ?? 0.4).toFixed(2)}
+          </span>
+        </label>
+      )}
     </div>
   );
 }
