@@ -18,6 +18,8 @@ type Props = {
   description?: string;
   actionLabel?: string;
   showAction?: boolean;
+  /** Allow rough/open strokes for AI interpretation instead of requiring a closed outline. */
+  allowOpen?: boolean;
 };
 
 const ERASER_RADIUS = 18;
@@ -77,6 +79,7 @@ export function DrawingPanel({
   description = "Draw a closed radial profile, then revolve it into 3D.",
   actionLabel = "Revolve 3D →",
   showAction = true,
+  allowOpen = false,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<"draw" | "erase">("draw");
@@ -249,20 +252,25 @@ export function DrawingPanel({
 
   const { outer, holes } = analyzeStrokes(strokes);
   const closed = !!outer && isClosedOutline(outer.points, CANVAS_SIZE);
+  const longestStroke = strokes.reduce<Stroke | null>(
+    (best, stroke) => (!best || stroke.points.length > best.points.length ? stroke : best),
+    null,
+  );
+  const primaryStroke = allowOpen ? longestStroke : outer;
 
   const handleExtrude = () => {
-    if (!outer) {
-      setError("Draw a shape first — try a circle, a star or a heart.");
+    if (!primaryStroke) {
+      setError("Draw something first so the AI can understand it.");
       return;
     }
-    if (!closed) {
+    if (!allowOpen && !closed) {
       setError("Your outline isn't closed yet. Finish the line back where you started.");
       return;
     }
     setError(null);
     onExtrude(
-      outer.points,
-      holes.map((h) => h.points),
+      primaryStroke.points,
+      allowOpen ? [] : holes.map((h) => h.points),
     );
   };
 

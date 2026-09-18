@@ -395,14 +395,14 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
             {penColor}
           </span>
           <div className="flex flex-wrap gap-1.5" aria-label="Primary marker colors">
-            {[
+             {([
               ["Red", "#ef4444"],
               ["Yellow", "#f59e0b"],
               ["Green", "#22c55e"],
               ["Blue", "#3b82f6"],
               ["Purple", "#8b5cf6"],
               ["Pink", "#ec4899"],
-            ].map(([name, color]) => (
+            ] as const).map(([name, color]) => (
               <button
                 key={color}
                 type="button"

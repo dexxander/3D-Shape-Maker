@@ -2,7 +2,7 @@
 
 Build a lightweight, responsive browser-based 3D creation app called MeshPad Lite.
 
-Stack: React + TypeScript + Vite, Three.js, Tailwind CSS. Deployable to Vercel. Do not use Python, machine learning, GPUs, AI APIs, or external inference services.
+Stack: React + TypeScript + Vite, Three.js, Tailwind CSS, and an optional server-side AI analysis endpoint. Deployable to Vercel.
 
 Core workflow:
 
@@ -10,7 +10,7 @@ Core workflow:
 
 2. Let users draw a closed outline.
 
-3. Convert the outline into an SVG/path and extrude it into a 3D mesh using Three.js ExtrudeGeometry.
+3. Ask AI to estimate the missing depth and whether the form should be extruded or revolved, then convert the outline into an editable 3D mesh using Three.js.
 
 4. Show the mesh in a 3D viewer with orbit, pan, zoom, grid, lighting, wireframe toggle, and reset camera.
 
@@ -36,11 +36,11 @@ Design:
 
 - Use clear labels, large buttons, helpful empty states, and accessible keyboard controls.
 
-- Include a short onboarding panel explaining: Draw → Extrude → Edit → Export.
+- Include a short onboarding panel explaining: Draw → AI analyze → Build 3D → Edit → Export.
 
 Implementation:
 
-- Keep all geometry processing client-side.
+- Keep mesh generation client-side; keep the AI key server-side in `GEMINI_API_KEY`.
 
 - Validate that outlines are closed and show a helpful error if they are not.
 

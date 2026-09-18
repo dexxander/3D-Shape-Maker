@@ -402,6 +402,22 @@ export function buildGeometry(object: SceneObject): THREE.BufferGeometry {
     case "cone":
       geo = new THREE.ConeGeometry(0.6, 1.3, 40);
       break;
+    case "roof": {
+      // A house roof is a triangular prism, not a cone. The triangle follows
+      // the front silhouette and the extrusion gives it real depth.
+      const roof = new THREE.Shape();
+      roof.moveTo(-0.5, 0);
+      roof.lineTo(0.5, 0);
+      roof.lineTo(0, 0.5);
+      roof.closePath();
+      geo = new THREE.ExtrudeGeometry(roof, {
+        depth: 1,
+        bevelEnabled: false,
+        curveSegments: 1,
+      });
+      geo.center();
+      break;
+    }
     case "sketch":
       geo = buildSketchGeometry(object.sketchPath ?? [], object.thickness ?? 0.16);
       break;
@@ -448,6 +464,7 @@ export function makeObject(kind: ShapeKind, index: number, extra: Partial<SceneO
     sphere: "Sphere",
     cylinder: "Cylinder",
     cone: "Cone",
+    roof: "Roof",
     extrude: "Revolved shape",
     sketch: "Sketch part",
     multiview: "Sculpted shape",

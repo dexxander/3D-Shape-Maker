@@ -38,7 +38,7 @@ export function saveProject(input: {
     updatedAt: Date.now(),
     scene: input.scene,
     strokes: input.strokes,
-    sketchEdits: input.sketchEdits,
+    ...(input.sketchEdits !== undefined ? { sketchEdits: input.sketchEdits } : {}),
   };
   if (!canUse()) return project;
   const all = listProjects().filter((p) => p.id !== project.id);

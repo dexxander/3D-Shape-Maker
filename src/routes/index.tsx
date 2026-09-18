@@ -17,8 +17,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { Viewer3D } from "@/components/meshpad/Viewer3D";
-import { SketchEditPanel, SKETCH_HEIGHT, SKETCH_WIDTH } from "@/components/meshpad/SketchEditPanel";
-import { MultiViewPanel } from "@/components/meshpad/multiviewpanel";
+import { MultiViewPanel, type ShapeAnalysis } from "@/components/meshpad/multiviewpanel";
 import { ShapeLibrary } from "@/components/meshpad/ShapeLibrary";
 import { ObjectInspector } from "@/components/meshpad/ObjectInspector";
 import { Onboarding } from "@/components/meshpad/Onboarding";
@@ -131,81 +130,96 @@ function MeshPad() {
     setProjectId(saved.id);
   };
 
-  const handleSketchAdd = (
-    stroke: Point[],
-    rotation: Vec3,
-    depthStroke: boolean,
-    color: string,
-  ) => {
-    const edit: SketchEdit = {
-      id: uid(),
-      operation: "add",
-      points: stroke,
-      createdAt: Date.now(),
-      depthStroke,
-      color,
+  const handleMultiViewBuild = (outline: Point[], analysis: ShapeAnalysis) => {
+    const allowedKinds = new Set(["cube", "sphere", "cylinder", "cone", "roof", "extrude"]);
+    const triple = (value: unknown, fallback: [number, number, number], mode: "position" | "scale" | "rotation") => {
+      if (!Array.isArray(value) || value.length !== 3 || !value.every((n) => typeof n === "number" && Number.isFinite(n))) {
+        return fallback;
+      }
+      return value.map((raw) => {
+        const n = raw as number;
+        if (mode === "rotation") {
+          const radians = Math.abs(n) > Math.PI * 2 ? (n * Math.PI) / 180 : n;
+          return Math.max(-Math.PI * 2, Math.min(Math.PI * 2, radians));
+        }
+        const world = Math.abs(n) > 8 ? n / 200 : n;
+        const limit = mode === "scale" ? 4 : 6;
+        return Math.max(mode === "scale" ? 0.1 : -limit, Math.min(limit, world));
+      }) as [number, number, number];
     };
-    const nextEdits = [...sketchEdits, edit];
-    if (stroke.length < 2) return;
-    const additions: SceneObject[] = [
-      makeObject("sketch", objects.length, {
-        name: `Sketch part ${objects.length + 1}`,
-        sketchPath: stroke,
-        thickness: 0.16,
-        rotation,
-        color,
-      }),
-    ];
-    const next = [...objects, ...additions];
-    setSketchEdits(nextEdits);
-    setScene({ objects: next, selectedId: additions[additions.length - 1]!.id });
-    persistSnapshot({ objects: next, selectedId: additions[additions.length - 1]!.id }, nextEdits);
-    setStatus("Added one continuous 3D mesh along the sketch.");
-  };
-
-  const handleSketchDelete = (stroke: Point[]) => {
-    if (objects.length === 0) return;
-    const edit: SketchEdit = {
-      id: uid(),
-      operation: "delete",
-      points: stroke,
-      createdAt: Date.now(),
-    };
-    const nextEdits = [...sketchEdits, edit];
-    const minX = Math.min(...stroke.map((point) => point.x));
-    const maxX = Math.max(...stroke.map((point) => point.x));
-    const minY = Math.min(...stroke.map((point) => point.y));
-    const maxY = Math.max(...stroke.map((point) => point.y));
-    const remaining = objects.filter((object) => {
-      const x = (object.position[0] / 4 + 0.5) * SKETCH_WIDTH;
-      const y = ((1.5 - object.position[1]) / 3) * SKETCH_HEIGHT;
-      return x < minX || x > maxX || y < minY || y > maxY;
+    const rawPlans = analysis.parts?.length
+      ? analysis.parts.slice(0, 8).map((part, index) => ({
+          name: typeof part.name === "string" && part.name.trim() ? part.name : `${analysis.objectType} part ${index + 1}`,
+          kind: allowedKinds.has(part.kind) ? part.kind : "cube" as const,
+          scale: triple(part.scale, [1, 1, 1], "scale"),
+          position: triple(part.position, [0, 0.8, 0], "position"),
+          rotation: triple(part.rotation, [0, 0, 0], "rotation"),
+          color: typeof part.color === "string" && /^#[0-9a-f]{6}$/i.test(part.color) ? part.color : "#6a8cff",
+        }))
+      : [{
+          name: "Main silhouette",
+          kind: "extrude" as const,
+          scale: [1, 1, 1] as [number, number, number],
+          position: [0, 0.8, 0] as [number, number, number],
+          rotation: [0, 0, 0] as [number, number, number],
+          color: "#6a8cff",
+        }];
+    const objectLabel = analysis.objectType.toLowerCase();
+    const looksLikeHouse = (() => {
+      if (outline.length < 12) return false;
+      const xs = outline.map((point) => point.x);
+      const ys = outline.map((point) => point.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
+      const top = outline.filter((point) => point.y <= minY + height * 0.16);
+      const lower = outline.filter((point) => point.y >= minY + height * 0.42);
+      const topSpan = top.length ? (Math.max(...top.map((point) => point.x)) - Math.min(...top.map((point) => point.x))) / width : 1;
+      const lowerSpan = lower.length ? (Math.max(...lower.map((point) => point.x)) - Math.min(...lower.map((point) => point.x))) / width : 0;
+      return height / width > 0.65 && topSpan < 0.55 && lowerSpan > 0.65;
+    })();
+    const isHouse = /house|home|building|cottage/.test(objectLabel) || looksLikeHouse;
+    // The user's silhouette is always the main object. AI-generated primitives
+    // are optional details only; they must never replace the actual drawing.
+    const plans = isHouse ? [] : rawPlans.filter((part) => part.kind !== "extrude");
+    const mainObject = makeObject("extrude", objects.length, {
+      name: `${analysis.objectType || "Drawn object"} silhouette`,
+      outline,
+      outlineSize: { width: 600, height: 600 },
+      depth: Math.max(0.12, Math.min(4, (Number.isFinite(analysis.depth) ? analysis.depth : 80) / 160)),
+      revolve: false,
+      position: [0, 0.8, 0],
+      scale: [1, 1, 1],
+      color: isHouse ? "#c96b52" : "#6a8cff",
     });
-    const removed = objects.length - remaining.length;
-    if (removed === 0) {
-      setStatus("Draw a wider DEL region over the mesh part you want to remove.");
-      return;
-    }
-    const nextScene = {
-      objects: remaining,
-      selectedId: remaining[remaining.length - 1]?.id ?? null,
-    };
-    setSketchEdits(nextEdits);
-    setScene(nextScene);
-    persistSnapshot(nextScene, nextEdits);
-    setStatus(`Deleted ${removed} mesh part${removed === 1 ? "" : "s"}.`);
-  };
-
-  const handleMultiViewBuild = (frontOutline: Point[], sideOutline: Point[]) => {
-    const object = makeObject("multiview", objects.length, {
-      name: `Sculpted shape ${objects.length + 1}`,
-      frontOutline,
-      sideOutline,
+    const detailObjects = plans.map((part, index) => {
+      const isExtrude = part.kind === "extrude";
+      return makeObject(part.kind, objects.length + index, {
+        name: part.name || `${analysis.objectType} part ${index + 1}`,
+        color: part.color,
+        position: part.position,
+        rotation: part.rotation,
+        scale: part.scale,
+        ...(isExtrude
+          ? {
+              outline,
+              outlineSize: { width: 600, height: 600 },
+              depth: Math.max(0.12, Math.min(4, (Number.isFinite(analysis.depth) ? analysis.depth : 80) / 160)),
+              revolve: analysis.form === "revolve",
+            }
+          : {}),
+      });
     });
-    const next = [...objects, object];
-    setScene({ objects: next, selectedId: object.id });
-    persistSnapshot({ objects: next, selectedId: object.id }, sketchEdits);
-    setStatus("Built a 3D shape from your front + side sketches.");
+    const newObjects = [mainObject, ...detailObjects];
+    const next = [...objects, ...newObjects];
+    const selectedId = newObjects[newObjects.length - 1]!.id;
+    setScene({ objects: next, selectedId });
+    setResetToken((token) => token + 1);
+    persistSnapshot({ objects: next, selectedId }, sketchEdits);
+    setStatus(`${analysis.source === "gemini" ? "Gemini generated" : "Local fallback generated"} a 3D ${analysis.objectType} — ${analysis.width.toFixed(0)} × ${analysis.height.toFixed(0)} × ${analysis.depth.toFixed(0)} drawing units.`);
   };
 
   const handleExtrude3D = useCallback(
@@ -460,13 +474,6 @@ function MeshPad() {
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
           <div className="space-y-4">
-            <SketchEditPanel
-              onAdd={handleSketchAdd}
-              onDelete={handleSketchDelete}
-              onClear={clearAll}
-              edits={sketchEdits}
-            />
-
             <MultiViewPanel onBuild={handleMultiViewBuild} />
 
             <section className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5">
@@ -568,7 +575,7 @@ function MeshPad() {
                     <div className="rounded-2xl bg-card/90 px-5 py-4">
                       <p className="font-display text-lg">Your scene is empty</p>
                       <p className="text-sm text-muted-foreground">
-                        Sketch an ADD operation to build geometry, or add a ready-made shape.
+                        Draw a front silhouette to build a 3D object, or add a ready-made shape.
                       </p>
                     </div>
                   </div>

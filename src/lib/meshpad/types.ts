@@ -22,6 +22,7 @@ export type ShapeKind =
   | "sphere"
   | "cylinder"
   | "cone"
+  | "roof"
   | "extrude"
   | "sketch"
   | "multiview";
