@@ -3,6 +3,9 @@ import type { ShapeAnalysis } from "@/components/meshpad/multiviewpanel";
 
 type Point = { x: number; y: number };
 type AnalyzeInput = { points: Point[]; imageData: string; canvasSize: number };
+type GeminiContent = { type?: string; text?: string };
+type GeminiStep = { type?: string; content?: GeminiContent[] };
+type GeminiPayload = { steps?: GeminiStep[] };
 
 const fallback = (points: Point[]): ShapeAnalysis => {
   const xs = points.map((point) => point.x);
@@ -12,7 +15,16 @@ const fallback = (points: Point[]): ShapeAnalysis => {
   return {
     source: "fallback",
     objectType: "unknown object",
-    parts: [{ name: "Main silhouette", kind: "extrude", scale: [1, 1, 1], position: [0, 0.8, 0], rotation: [0, 0, 0], color: "#6a8cff" }],
+    parts: [
+      {
+        name: "Main silhouette",
+        kind: "extrude",
+        scale: [1, 1, 1],
+        position: [0, 0.8, 0],
+        rotation: [0, 0, 0],
+        color: "#6a8cff",
+      },
+    ],
     width,
     height,
     depth: Math.max(width * 0.55, 80),
@@ -50,7 +62,16 @@ const responseSchema = {
     confidence: { type: "number" },
     explanation: { type: "string" },
   },
-  required: ["objectType", "parts", "width", "height", "depth", "form", "confidence", "explanation"],
+  required: [
+    "objectType",
+    "parts",
+    "width",
+    "height",
+    "depth",
+    "form",
+    "confidence",
+    "explanation",
+  ],
 };
 
 export const analyzeShape = createServerFn({ method: "POST" })
@@ -58,7 +79,10 @@ export const analyzeShape = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<ShapeAnalysis> => {
     const apiKey = process.env["GEMINI_API_KEY"];
     if (!apiKey) {
-      return { ...fallback(data.points), aiError: "GEMINI_API_KEY is not available to the server." };
+      return {
+        ...fallback(data.points),
+        aiError: "GEMINI_API_KEY is not available to the server.",
+      };
     }
 
     const imageData = data.imageData.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/);
@@ -97,15 +121,16 @@ export const analyzeShape = createServerFn({ method: "POST" })
       });
 
       if (!result.ok) throw new Error(await result.text());
-      const payload = await result.json();
+      const payload = (await result.json()) as GeminiPayload;
       const text = payload.steps
-        ?.filter((step: any) => step.type === "model_output")
-        .flatMap((step: any) => step.content ?? [])
-        .find((content: any) => content.type === "text")?.text;
+        ?.filter((step) => step.type === "model_output")
+        .flatMap((step) => step.content ?? [])
+        .find((content) => content.type === "text")?.text;
       if (!text) throw new Error("Gemini returned no analysis.");
       return { ...(JSON.parse(text) as ShapeAnalysis), source: "gemini" };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Gemini returned an invalid response.";
+      const message =
+        error instanceof Error ? error.message : "Gemini returned an invalid response.";
       return { ...fallback(data.points), aiError: message.slice(0, 240) };
     }
   });

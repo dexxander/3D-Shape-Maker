@@ -18,7 +18,8 @@ function addRoomDecor(scene: THREE.Scene) {
   const tileGeometry = new THREE.BoxGeometry(1.85, 0.12, 1.85);
   for (let x = -9; x <= 9; x++) {
     for (let z = -9; z <= 9; z++) {
-      const colorIndex = ((x + z + 8) % tileColors.length + tileColors.length) % tileColors.length;
+      const colorIndex =
+        (((x + z + 8) % tileColors.length) + tileColors.length) % tileColors.length;
       const tile = new THREE.Mesh(tileGeometry, roomMaterial(tileColors[colorIndex]!));
       tile.position.set(x * 1.9, -0.07, z * 1.9);
       tile.receiveShadow = true;
@@ -54,7 +55,10 @@ function addRoomDecor(scene: THREE.Scene) {
   }
   const blockColors = ["#ff8a5b", "#6a8cff", "#ffc857", "#48b8a0"];
   for (let i = 0; i < 4; i++) {
-    const block = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.48, 0.48), roomMaterial(blockColors[i]!));
+    const block = new THREE.Mesh(
+      new THREE.BoxGeometry(0.48, 0.48, 0.48),
+      roomMaterial(blockColors[i]!),
+    );
     block.position.set(6.75 + i * 0.52, 1.62, -9.55);
     block.rotation.y = i * 0.22;
     block.castShadow = true;
@@ -71,7 +75,10 @@ function addRoomDecor(scene: THREE.Scene) {
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.48, 24, 16), fur);
   head.position.set(7.6, 1.55, -8.95);
   bear.add(head);
-  for (const [x, y] of [[7.28, 1.88], [7.92, 1.88]] as const) {
+  for (const [x, y] of [
+    [7.28, 1.88],
+    [7.92, 1.88],
+  ] as const) {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.16, 18, 12), fur);
     ear.position.set(x, y, -8.95);
     bear.add(ear);
@@ -90,7 +97,10 @@ function addRoomDecor(scene: THREE.Scene) {
   ball.castShadow = true;
   decor.add(ball);
   for (const rotation of [0.3, 2.4, 4.5]) {
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.045, 8, 32, Math.PI * 0.58), roomMaterial("#fff8e8", 0.5));
+    const band = new THREE.Mesh(
+      new THREE.TorusGeometry(0.66, 0.045, 8, 32, Math.PI * 0.58),
+      roomMaterial("#fff8e8", 0.5),
+    );
     band.position.copy(ball.position);
     band.rotation.set(Math.PI / 2, rotation, 0);
     decor.add(band);
@@ -99,7 +109,10 @@ function addRoomDecor(scene: THREE.Scene) {
   // Small wall pennants add a playful finish without competing with the editable meshes.
   const pennantColors = ["#ff8a5b", "#6a8cff", "#ffc857", "#48b8a0", "#e05c6e"];
   for (let i = 0; i < 5; i++) {
-    const pennant = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 3), roomMaterial(pennantColors[i]!));
+    const pennant = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 0.55, 3),
+      roomMaterial(pennantColors[i]!),
+    );
     pennant.position.set(-2.1 + i * 1.05, 7.25, -18.62);
     pennant.rotation.set(Math.PI / 2, 0, Math.PI);
     decor.add(pennant);
@@ -131,7 +144,10 @@ function addRoomDecor(scene: THREE.Scene) {
 
   const cushionColors = ["#f7a8c4", "#9bded0", "#a9bdf5"];
   for (let i = 0; i < 3; i++) {
-    const cushion = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 12), roomMaterial(cushionColors[i]!));
+    const cushion = new THREE.Mesh(
+      new THREE.SphereGeometry(0.55, 20, 12),
+      roomMaterial(cushionColors[i]!),
+    );
     cushion.scale.set(1.35, 0.35, 1.05);
     cushion.position.set(-7 + i * 1.15, 0.38, -8.2);
     cushion.castShadow = true;
@@ -177,7 +193,10 @@ function addRoomDecor(scene: THREE.Scene) {
     decor.add(rail);
   }
 
-  const arch = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.12, 12, 32, Math.PI), roomMaterial("#6a8cff"));
+  const arch = new THREE.Mesh(
+    new THREE.TorusGeometry(1.25, 0.12, 12, 32, Math.PI),
+    roomMaterial("#6a8cff"),
+  );
   arch.position.set(-2.6, 1.45, 4.8);
   arch.rotation.set(Math.PI / 2, 0, 0);
   arch.castShadow = true;
@@ -196,8 +215,15 @@ function addRoomDecor(scene: THREE.Scene) {
   decor.add(pitBase);
   const pitBallColors = ["#ff8a5b", "#ffc857", "#48b8a0", "#e05c6e", "#6a8cff"];
   for (let i = 0; i < 12; i++) {
-    const pitBall = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 12), roomMaterial(pitBallColors[i % pitBallColors.length]!));
-    pitBall.position.set(-6.55 + (i % 4) * 0.75, 0.72 + Math.floor(i / 4) * 0.18, 3.7 + (i % 3) * 0.55);
+    const pitBall = new THREE.Mesh(
+      new THREE.SphereGeometry(0.28, 16, 12),
+      roomMaterial(pitBallColors[i % pitBallColors.length]!),
+    );
+    pitBall.position.set(
+      -6.55 + (i % 4) * 0.75,
+      0.72 + Math.floor(i / 4) * 0.18,
+      3.7 + (i % 3) * 0.55,
+    );
     pitBall.castShadow = true;
     decor.add(pitBall);
   }
@@ -205,7 +231,10 @@ function addRoomDecor(scene: THREE.Scene) {
   // Colorful wall circles add depth without crowding the taller room.
   const wallArtColors = ["#ff9fb8", "#ffc857", "#8bd3c7", "#a9bdf5"];
   for (let i = 0; i < 4; i++) {
-    const art = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.12, 10, 24), roomMaterial(wallArtColors[i]!));
+    const art = new THREE.Mesh(
+      new THREE.TorusGeometry(0.5, 0.12, 10, 24),
+      roomMaterial(wallArtColors[i]!),
+    );
     art.position.set(-8 + i * 1.6, 5.4, -18.62);
     art.rotation.x = Math.PI / 2;
     decor.add(art);
@@ -543,7 +572,10 @@ export function Viewer3D({
 
           // Anchor drawing plane directly to the clicked face of the 3D shape!
           drawState.planeGroup.position.copy(hit.point);
-          drawState.planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), worldNormal);
+          drawState.planeGroup.quaternion.setFromUnitVectors(
+            new THREE.Vector3(0, 0, 1),
+            worldNormal,
+          );
           drawState.planeGroup.updateMatrixWorld(true);
 
           drawState.surfaceMesh = hitMesh;
@@ -655,7 +687,9 @@ export function Viewer3D({
               : new THREE.Vector3(0, 1, 0);
 
             drawState.surfaceCursorGroup.visible = true;
-            drawState.surfaceCursorGroup.position.copy(hit.point.clone().addScaledVector(worldNormal, 0.02));
+            drawState.surfaceCursorGroup.position.copy(
+              hit.point.clone().addScaledVector(worldNormal, 0.02),
+            );
             // In cut mode, direction cone points inward into shape
             drawState.surfaceCursorGroup.quaternion.setFromUnitVectors(
               new THREE.Vector3(0, 0, 1),
@@ -663,7 +697,10 @@ export function Viewer3D({
             );
 
             drawState.surfaceCursorGroup.traverse((child) => {
-              if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
+              if (
+                child instanceof THREE.Mesh &&
+                child.material instanceof THREE.MeshBasicMaterial
+              ) {
                 child.material.color.set(isCutMode ? "#ef4444" : "#3b82f6");
               }
             });
@@ -712,7 +749,10 @@ export function Viewer3D({
             }
 
             // Check closure distance against start point (proportional to plane size, points >= 12)
-            const dStart = Math.hypot(localPt.x - drawState.startPoint.x, localPt.y - drawState.startPoint.y);
+            const dStart = Math.hypot(
+              localPt.x - drawState.startPoint.x,
+              localPt.y - drawState.startPoint.y,
+            );
             const closeThreshold = PLANE_SIZE * 0.14;
             const closed = drawState.points.length >= 12 && dStart <= closeThreshold;
 
@@ -768,7 +808,9 @@ export function Viewer3D({
         drawStateRef.current.isDrawing = false;
         try {
           renderer.domElement.releasePointerCapture(e.pointerId);
-        } catch {}
+        } catch {
+          // Pointer capture may already have been released by the browser.
+        }
         setIsClosing(false);
         return;
       }
@@ -787,7 +829,9 @@ export function Viewer3D({
         drawState.isDrawing = false;
         try {
           renderer.domElement.releasePointerCapture(e.pointerId);
-        } catch {}
+        } catch {
+          // Pointer capture may already have been released by the browser.
+        }
 
         if (drawState.isClosed && drawState.points.length >= 12 && drawState.startPoint) {
           // Closed outline! Connect back to exact start point
@@ -805,7 +849,10 @@ export function Viewer3D({
 
           if (drawState.surfaceMesh && drawState.surfaceNormal) {
             // Calculate bounding box of the drawn points on the surface
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            let minX = Infinity,
+              maxX = -Infinity,
+              minY = Infinity,
+              maxY = -Infinity;
             for (const pt of closedPoints) {
               minX = Math.min(minX, pt.x);
               maxX = Math.max(maxX, pt.x);
@@ -836,7 +883,10 @@ export function Viewer3D({
                 worldQuat,
                 new THREE.Vector3(s, s, 1),
               );
-              const cutterLocalMatrix = targetMesh.matrixWorld.clone().invert().multiply(cutterWorldMatrix);
+              const cutterLocalMatrix = targetMesh.matrixWorld
+                .clone()
+                .invert()
+                .multiply(cutterWorldMatrix);
 
               const localPos = new THREE.Vector3();
               const localQuat = new THREE.Quaternion();
@@ -856,13 +906,18 @@ export function Viewer3D({
               };
 
               cut3DRef.current?.(targetObj.id, cutOp);
-              setHudStatus(`Carved cut into ${targetObj.name}! Draw again to add more cuts, or toggle Extend.`);
+              setHudStatus(
+                `Carved cut into ${targetObj.name}! Draw again to add more cuts, or toggle Extend.`,
+              );
             } else {
               // Center of extrusion: offset by DEPTH / 2 + bevel along +Z so base sits flush against the face
               const BEVEL = 0.04;
               const centerLocal = new THREE.Vector3(cx, cy, DEPTH / 2 + BEVEL);
               const worldCenter = drawState.planeGroup.localToWorld(centerLocal);
-              const euler = new THREE.Euler().setFromQuaternion(drawState.planeGroup.quaternion, "XYZ");
+              const euler = new THREE.Euler().setFromQuaternion(
+                drawState.planeGroup.quaternion,
+                "XYZ",
+              );
 
               const parentName = drawState.surfaceObject?.name ?? "3D shape";
               extrude3DRef.current?.(outline, {
@@ -872,7 +927,9 @@ export function Viewer3D({
                 name: `Extension of ${parentName}`,
               });
 
-              setHudStatus(`Extended ${parentName}! Hover any 3D shape to draw & extend again, or click Exit.`);
+              setHudStatus(
+                `Extended ${parentName}! Hover any 3D shape to draw & extend again, or click Exit.`,
+              );
             }
           } else {
             // Free-space drawing
@@ -937,7 +994,11 @@ export function Viewer3D({
           }
         });
         planeGroup.traverse((child) => {
-          if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Sprite) {
+          if (
+            child instanceof THREE.Mesh ||
+            child instanceof THREE.Line ||
+            child instanceof THREE.Sprite
+          ) {
             child.geometry?.dispose();
             if (Array.isArray(child.material)) {
               child.material.forEach((m) => m.dispose());
@@ -1004,9 +1065,7 @@ export function Viewer3D({
     // ── Depth handle visibility & positioning ──────────────────
     const tcState = tcRef.current;
     if (tcState) {
-      const selectedObj = selectedId
-        ? objects.find((o) => o.id === selectedId)
-        : null;
+      const selectedObj = selectedId ? objects.find((o) => o.id === selectedId) : null;
 
       if (!draw3DRef.current && selectedObj && selectedObj.kind === "extrude") {
         const depth = selectedObj.depth ?? 0.4;
@@ -1244,7 +1303,11 @@ export function Viewer3D({
           }
         });
         planeGroup.traverse((child) => {
-          if (child instanceof THREE.Mesh || child instanceof THREE.Line || child instanceof THREE.Sprite) {
+          if (
+            child instanceof THREE.Mesh ||
+            child instanceof THREE.Line ||
+            child instanceof THREE.Sprite
+          ) {
             child.geometry?.dispose();
             if (Array.isArray(child.material)) {
               child.material.forEach((m) => m.dispose());
@@ -1378,7 +1441,15 @@ export function Viewer3D({
               {hudStatus}
             </div>
             <p className="text-[11px] text-muted-foreground/80 font-medium">
-              Hold <kbd className="rounded border bg-background/80 px-1 py-0.5 font-mono text-[10px]">Shift</kbd> to snap angles · Press <kbd className="rounded border bg-background/80 px-1 py-0.5 font-mono text-[10px]">C</kbd> to toggle Extend/Cut
+              Hold{" "}
+              <kbd className="rounded border bg-background/80 px-1 py-0.5 font-mono text-[10px]">
+                Shift
+              </kbd>{" "}
+              to snap angles · Press{" "}
+              <kbd className="rounded border bg-background/80 px-1 py-0.5 font-mono text-[10px]">
+                C
+              </kbd>{" "}
+              to toggle Extend/Cut
             </p>
           </div>
         </div>

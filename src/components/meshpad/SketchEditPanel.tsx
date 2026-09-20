@@ -248,9 +248,7 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
         ctx,
         edit.points,
         rotation,
-        edit.operation === "add"
-          ? `${edit.color ?? "#3e9f70"}66`
-          : "rgba(155, 107, 179, 0.3)",
+        edit.operation === "add" ? `${edit.color ?? "#3e9f70"}66` : "rgba(155, 107, 179, 0.3)",
         4,
         false,
         edit.depthStroke,
@@ -395,14 +393,16 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
             {penColor}
           </span>
           <div className="flex flex-wrap gap-1.5" aria-label="Primary marker colors">
-             {([
-              ["Red", "#ef4444"],
-              ["Yellow", "#f59e0b"],
-              ["Green", "#22c55e"],
-              ["Blue", "#3b82f6"],
-              ["Purple", "#8b5cf6"],
-              ["Pink", "#ec4899"],
-            ] as const).map(([name, color]) => (
+            {(
+              [
+                ["Red", "#ef4444"],
+                ["Yellow", "#f59e0b"],
+                ["Green", "#22c55e"],
+                ["Blue", "#3b82f6"],
+                ["Purple", "#8b5cf6"],
+                ["Pink", "#ec4899"],
+              ] as const
+            ).map(([name, color]) => (
               <button
                 key={color}
                 type="button"
@@ -488,7 +488,9 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
         />
       </div>
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-        <p>The selected marker color adds geometry. Purple strokes delete nearby generated parts.</p>
+        <p>
+          The selected marker color adds geometry. Purple strokes delete nearby generated parts.
+        </p>
         <p className="font-semibold">
           {edits.length} sketch edit{edits.length === 1 ? "" : "s"} saved for reference
         </p>

@@ -119,21 +119,32 @@ function MeshPad() {
     setStatus(`${object.name} added`);
   };
 
-  const persistSnapshot = (nextScene: SceneState, nextEdits: SketchEdit[]) => {
-    const saved = saveProject({
-      id: projectId ?? undefined,
-      name: projectName,
-      scene: nextScene,
-      strokes: drawing.state,
-      sketchEdits: nextEdits,
-    });
-    setProjectId(saved.id);
-  };
+  const persistSnapshot = useCallback(
+    (nextScene: SceneState, nextEdits: SketchEdit[]) => {
+      const saved = saveProject({
+        id: projectId ?? undefined,
+        name: projectName,
+        scene: nextScene,
+        strokes: drawing.state,
+        sketchEdits: nextEdits,
+      });
+      setProjectId(saved.id);
+    },
+    [drawing, projectId, projectName],
+  );
 
   const handleMultiViewBuild = (outline: Point[], analysis: ShapeAnalysis) => {
     const allowedKinds = new Set(["cube", "sphere", "cylinder", "cone", "roof", "extrude"]);
-    const triple = (value: unknown, fallback: [number, number, number], mode: "position" | "scale" | "rotation") => {
-      if (!Array.isArray(value) || value.length !== 3 || !value.every((n) => typeof n === "number" && Number.isFinite(n))) {
+    const triple = (
+      value: unknown,
+      fallback: [number, number, number],
+      mode: "position" | "scale" | "rotation",
+    ) => {
+      if (
+        !Array.isArray(value) ||
+        value.length !== 3 ||
+        !value.every((n) => typeof n === "number" && Number.isFinite(n))
+      ) {
         return fallback;
       }
       return value.map((raw) => {
@@ -149,21 +160,29 @@ function MeshPad() {
     };
     const rawPlans = analysis.parts?.length
       ? analysis.parts.slice(0, 8).map((part, index) => ({
-          name: typeof part.name === "string" && part.name.trim() ? part.name : `${analysis.objectType} part ${index + 1}`,
-          kind: allowedKinds.has(part.kind) ? part.kind : "cube" as const,
+          name:
+            typeof part.name === "string" && part.name.trim()
+              ? part.name
+              : `${analysis.objectType} part ${index + 1}`,
+          kind: allowedKinds.has(part.kind) ? part.kind : ("cube" as const),
           scale: triple(part.scale, [1, 1, 1], "scale"),
           position: triple(part.position, [0, 0.8, 0], "position"),
           rotation: triple(part.rotation, [0, 0, 0], "rotation"),
-          color: typeof part.color === "string" && /^#[0-9a-f]{6}$/i.test(part.color) ? part.color : "#6a8cff",
+          color:
+            typeof part.color === "string" && /^#[0-9a-f]{6}$/i.test(part.color)
+              ? part.color
+              : "#6a8cff",
         }))
-      : [{
-          name: "Main silhouette",
-          kind: "extrude" as const,
-          scale: [1, 1, 1] as [number, number, number],
-          position: [0, 0.8, 0] as [number, number, number],
-          rotation: [0, 0, 0] as [number, number, number],
-          color: "#6a8cff",
-        }];
+      : [
+          {
+            name: "Main silhouette",
+            kind: "extrude" as const,
+            scale: [1, 1, 1] as [number, number, number],
+            position: [0, 0.8, 0] as [number, number, number],
+            rotation: [0, 0, 0] as [number, number, number],
+            color: "#6a8cff",
+          },
+        ];
     const objectLabel = analysis.objectType.toLowerCase();
     const looksLikeHouse = (() => {
       if (outline.length < 12) return false;
@@ -177,8 +196,15 @@ function MeshPad() {
       const height = Math.max(1, maxY - minY);
       const top = outline.filter((point) => point.y <= minY + height * 0.16);
       const lower = outline.filter((point) => point.y >= minY + height * 0.42);
-      const topSpan = top.length ? (Math.max(...top.map((point) => point.x)) - Math.min(...top.map((point) => point.x))) / width : 1;
-      const lowerSpan = lower.length ? (Math.max(...lower.map((point) => point.x)) - Math.min(...lower.map((point) => point.x))) / width : 0;
+      const topSpan = top.length
+        ? (Math.max(...top.map((point) => point.x)) - Math.min(...top.map((point) => point.x))) /
+          width
+        : 1;
+      const lowerSpan = lower.length
+        ? (Math.max(...lower.map((point) => point.x)) -
+            Math.min(...lower.map((point) => point.x))) /
+          width
+        : 0;
       return height / width > 0.65 && topSpan < 0.55 && lowerSpan > 0.65;
     })();
     const isHouse = /house|home|building|cottage/.test(objectLabel) || looksLikeHouse;
@@ -189,7 +215,10 @@ function MeshPad() {
       name: `${analysis.objectType || "Drawn object"} silhouette`,
       outline,
       outlineSize: { width: 600, height: 600 },
-      depth: Math.max(0.12, Math.min(4, (Number.isFinite(analysis.depth) ? analysis.depth : 80) / 160)),
+      depth: Math.max(
+        0.12,
+        Math.min(4, (Number.isFinite(analysis.depth) ? analysis.depth : 80) / 160),
+      ),
       revolve: false,
       position: [0, 0.8, 0],
       scale: [1, 1, 1],
@@ -207,7 +236,10 @@ function MeshPad() {
           ? {
               outline,
               outlineSize: { width: 600, height: 600 },
-              depth: Math.max(0.12, Math.min(4, (Number.isFinite(analysis.depth) ? analysis.depth : 80) / 160)),
+              depth: Math.max(
+                0.12,
+                Math.min(4, (Number.isFinite(analysis.depth) ? analysis.depth : 80) / 160),
+              ),
               revolve: analysis.form === "revolve",
             }
           : {}),
@@ -219,7 +251,9 @@ function MeshPad() {
     setScene({ objects: next, selectedId });
     setResetToken((token) => token + 1);
     persistSnapshot({ objects: next, selectedId }, sketchEdits);
-    setStatus(`${analysis.source === "gemini" ? "Gemini generated" : "Local fallback generated"} a 3D ${analysis.objectType} — ${analysis.width.toFixed(0)} × ${analysis.height.toFixed(0)} × ${analysis.depth.toFixed(0)} drawing units.`);
+    setStatus(
+      `${analysis.source === "gemini" ? "Gemini generated" : "Local fallback generated"} a 3D ${analysis.objectType} — ${analysis.width.toFixed(0)} × ${analysis.height.toFixed(0)} × ${analysis.depth.toFixed(0)} drawing units.`,
+    );
   };
 
   const handleExtrude3D = useCallback(
@@ -249,7 +283,7 @@ function MeshPad() {
       persistSnapshot({ objects: next, selectedId: object.id }, sketchEdits);
       setStatus(`Added ${object.name} to the scene`);
     },
-    [objects, setScene, sketchEdits],
+    [objects, persistSnapshot, setScene, sketchEdits],
   );
 
   const handleCut3D = useCallback(
@@ -268,7 +302,7 @@ function MeshPad() {
       persistSnapshot({ objects: next, selectedId: targetId }, sketchEdits);
       setStatus(`Carved cut into ${target.name}`);
     },
-    [objects, setScene, sketchEdits],
+    [objects, persistSnapshot, setScene, sketchEdits],
   );
 
   const patchSelected = (patch: Partial<SceneObject>, history = false) => {
@@ -512,7 +546,9 @@ function MeshPad() {
                   </HeaderButton>
                   <HeaderButton
                     onClick={() => setShowEnvironment((visible) => !visible)}
-                    icon={showEnvironment ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    icon={
+                      showEnvironment ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />
+                    }
                   >
                     {showEnvironment ? "Hide playground" : "Show playground"}
                   </HeaderButton>

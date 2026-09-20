@@ -1,5 +1,10 @@
 type Point = { x: number; y: number };
 type RequestBody = { points?: Point[]; imageData?: string; canvasSize?: number };
+type ApiRequest = { method?: string; body?: unknown };
+type ApiResponse = { status: (code: number) => { json: (payload: unknown) => ApiResponse } };
+type GeminiContent = { type?: string; text?: string };
+type GeminiStep = { type?: string; content?: GeminiContent[] };
+type GeminiPayload = { steps?: GeminiStep[] };
 
 const fallback = (points: Point[]) => {
   const xs = points.map((point) => point.x);
@@ -8,7 +13,16 @@ const fallback = (points: Point[]) => {
   const height = Math.max(...ys) - Math.min(...ys);
   return {
     objectType: "unknown object",
-    parts: [{ name: "Main silhouette", kind: "extrude", scale: [1, 1, 1], position: [0, 0.8, 0], rotation: [0, 0, 0], color: "#6a8cff" }],
+    parts: [
+      {
+        name: "Main silhouette",
+        kind: "extrude",
+        scale: [1, 1, 1],
+        position: [0, 0.8, 0],
+        rotation: [0, 0, 0],
+        color: "#6a8cff",
+      },
+    ],
     width,
     height,
     depth: Math.max(width * 0.55, 80),
@@ -21,7 +35,10 @@ const fallback = (points: Point[]) => {
 const responseSchema = {
   type: "object",
   properties: {
-    objectType: { type: "string", description: "What the drawing represents, such as house, car, tree, or toy." },
+    objectType: {
+      type: "string",
+      description: "What the drawing represents, such as house, car, tree, or toy.",
+    },
     parts: {
       type: "array",
       minItems: 1,
@@ -47,10 +64,19 @@ const responseSchema = {
     confidence: { type: "number" },
     explanation: { type: "string" },
   },
-  required: ["objectType", "parts", "width", "height", "depth", "form", "confidence", "explanation"],
+  required: [
+    "objectType",
+    "parts",
+    "width",
+    "height",
+    "depth",
+    "form",
+    "confidence",
+    "explanation",
+  ],
 };
 
-export default async function handler(request: any, response: any) {
+export default async function handler(request: ApiRequest, response: ApiResponse) {
   if (request.method !== "POST") return response.status(405).json({ error: "Method not allowed" });
 
   const body = request.body as RequestBody;
@@ -101,11 +127,11 @@ export default async function handler(request: any, response: any) {
     });
 
     if (!result.ok) throw new Error(await result.text());
-    const payload = await result.json();
+    const payload = (await result.json()) as GeminiPayload;
     const text = payload.steps
-      ?.filter((step: any) => step.type === "model_output")
-      .flatMap((step: any) => step.content ?? [])
-      .find((content: any) => content.type === "text")?.text;
+      ?.filter((step) => step.type === "model_output")
+      .flatMap((step) => step.content ?? [])
+      .find((content) => content.type === "text")?.text;
     if (!text) throw new Error("Gemini returned no analysis.");
     return response.status(200).json(JSON.parse(text));
   } catch {

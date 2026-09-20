@@ -18,14 +18,7 @@ export type SketchEdit = {
 };
 
 export type ShapeKind =
-  | "cube"
-  | "sphere"
-  | "cylinder"
-  | "cone"
-  | "roof"
-  | "extrude"
-  | "sketch"
-  | "multiview";
+  "cube" | "sphere" | "cylinder" | "cone" | "roof" | "extrude" | "sketch" | "multiview";
 
 export type Vec3 = [number, number, number];
 

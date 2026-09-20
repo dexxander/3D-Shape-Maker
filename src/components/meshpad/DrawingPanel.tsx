@@ -268,10 +268,7 @@ export function DrawingPanel({
       return;
     }
     setError(null);
-    onExtrude(
-      primaryStroke.points,
-      allowOpen ? [] : holes.map((h) => h.points),
-    );
+    onExtrude(primaryStroke.points, allowOpen ? [] : holes.map((h) => h.points));
   };
 
   return (
@@ -344,7 +341,13 @@ export function DrawingPanel({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-1 px-1 text-xs text-muted-foreground">
-        <span>💡 Hold <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground">Shift</kbd> to snap lines to 45°/90°</span>
+        <span>
+          💡 Hold{" "}
+          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] font-semibold text-foreground">
+            Shift
+          </kbd>{" "}
+          to snap lines to 45°/90°
+        </span>
         <span>Draw inside a shape to cut holes</span>
       </div>
 

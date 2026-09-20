@@ -17,8 +17,7 @@ export function isPointInPolygon(p: Point, polygon: Point[]): boolean {
       yi = polygon[i]!.y;
     const xj = polygon[j]!.x,
       yj = polygon[j]!.y;
-    const intersect =
-      yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi;
+    const intersect = yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi;
     if (intersect) inside = !inside;
   }
   return inside;
@@ -355,11 +354,7 @@ export function applyCuts(
   let currentGeo = baseGeo;
   for (const cut of cuts) {
     try {
-      const cutterShape = outlineToShape(
-        cut.outline,
-        { width: 600, height: 600 },
-        cut.holes,
-      );
+      const cutterShape = outlineToShape(cut.outline, { width: 600, height: 600 }, cut.holes);
       const cutterGeo = new THREE.ExtrudeGeometry(cutterShape, {
         depth: cut.depth,
         bevelEnabled: false,

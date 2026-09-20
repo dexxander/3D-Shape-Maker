@@ -64,7 +64,9 @@ export function toSTL(objects: SceneObject[]): string {
   const tris = triangles(buildExportGroup(objects));
   const lines = ["solid meshpad"];
   for (const t of tris) {
-    lines.push(`facet normal ${t.normal.x.toFixed(5)} ${t.normal.y.toFixed(5)} ${t.normal.z.toFixed(5)}`);
+    lines.push(
+      `facet normal ${t.normal.x.toFixed(5)} ${t.normal.y.toFixed(5)} ${t.normal.z.toFixed(5)}`,
+    );
     lines.push("  outer loop");
     for (const v of [t.a, t.b, t.c]) {
       lines.push(`    vertex ${v.x.toFixed(5)} ${v.y.toFixed(5)} ${v.z.toFixed(5)}`);

@@ -35,7 +35,8 @@ export function MultiViewPanel({ onBuild }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const outline = drawing.state.reduce<Stroke | null>(
-    (best, stroke) => (!best || stroke.points.length > best.points.length ? stroke : best), null,
+    (best, stroke) => (!best || stroke.points.length > best.points.length ? stroke : best),
+    null,
   );
   const hasDrawing = !!outline;
 
@@ -72,11 +73,13 @@ export function MultiViewPanel({ onBuild }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const analysis = await analyzeShape({ data: {
+      const analysis = await analyzeShape({
+        data: {
           points: outline.points,
           imageData: drawingImage(drawing.state),
           canvasSize: CANVAS_SIZE,
-        } });
+        },
+      });
       onBuild(outline.points, analysis);
       if (analysis.source === "fallback") {
         setError(`Gemini was not used: ${analysis.aiError ?? analysis.explanation}`);
@@ -91,15 +94,21 @@ export function MultiViewPanel({ onBuild }: Props) {
         source: "fallback",
         aiError: "The Gemini request could not be completed.",
         objectType: "unknown object",
-        parts: [{
-          name: "Main silhouette",
-          kind: "extrude",
-          scale: [1, 1, 1],
-          position: [0, 0.8, 0],
-          rotation: [0, 0, 0],
-          color: "#6a8cff",
-        }],
-        width, height, depth: Math.max(width * 0.55, 80), form: "extrude", confidence: 0.35,
+        parts: [
+          {
+            name: "Main silhouette",
+            kind: "extrude",
+            scale: [1, 1, 1],
+            position: [0, 0.8, 0],
+            rotation: [0, 0, 0],
+            color: "#6a8cff",
+          },
+        ],
+        width,
+        height,
+        depth: Math.max(width * 0.55, 80),
+        form: "extrude",
+        confidence: 0.35,
         explanation: "AI was unavailable, so depth was estimated from the front silhouette.",
       });
       drawing.reset([]);
@@ -114,20 +123,38 @@ export function MultiViewPanel({ onBuild }: Props) {
         <BrainCircuit className="h-5 w-5 text-primary" />
         <div>
           <h2 className="font-display text-xl">Draw one view, build 3D</h2>
-          <p className="text-sm text-muted-foreground">Draw one object. Gemini identifies it and creates an editable 3D plan from simple parts like bodies, roofs, wheels, and stems.</p>
+          <p className="text-sm text-muted-foreground">
+            Draw one object. Gemini identifies it and creates an editable 3D plan from simple parts
+            like bodies, roofs, wheels, and stems.
+          </p>
         </div>
       </header>
       <div className="mt-4">
         <DrawingPanel
-          strokes={drawing.state} onStrokesChange={drawing.set} onUndo={drawing.undo} onRedo={drawing.redo}
-          canUndo={drawing.canUndo} canRedo={drawing.canRedo} onExtrude={handleBuild} allowOpen
+          strokes={drawing.state}
+          onStrokesChange={drawing.set}
+          onUndo={drawing.undo}
+          onRedo={drawing.redo}
+          canUndo={drawing.canUndo}
+          canRedo={drawing.canRedo}
+          onExtrude={handleBuild}
+          allowOpen
           title="Front silhouette"
           description="Close the outline around the object. Gemini will recognize what you drew and assemble a simple editable 3D version."
           actionLabel={busy ? "AI is reading the shape…" : "Ask AI → Build 3D"}
         />
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">{hasDrawing ? "Drawing ✓ — ready for AI analysis" : "Draw any object, open or closed"}</p>
-      {error && <p role="alert" className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+      <p className="mt-3 text-xs text-muted-foreground">
+        {hasDrawing ? "Drawing ✓ — ready for AI analysis" : "Draw any object, open or closed"}
+      </p>
+      {error && (
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
     </section>
   );
 }
