@@ -123,7 +123,7 @@ export function DrawingPanel({
       ctx.stroke();
     }
 
-    const { outer, holes } = analyzeStrokes(list);
+    const { holes } = analyzeStrokes(list);
     const holeIds = new Set(holes.map((h) => h.id));
 
     // Render hole shapes with distinct cutout style

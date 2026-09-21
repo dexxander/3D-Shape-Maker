@@ -33,7 +33,6 @@ import type {
   ShapeKind,
   SketchEdit,
   Stroke,
-  Vec3,
 } from "@/lib/meshpad/types";
 import { emptyScene, uid } from "@/lib/meshpad/types";
 

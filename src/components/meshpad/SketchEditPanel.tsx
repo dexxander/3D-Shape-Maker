@@ -479,7 +479,7 @@ export function SketchEditPanel({ onAdd, onDelete, onClear, edits }: Props) {
             }
             finish();
           }}
-          onPointerCancel={(event) => {
+          onPointerCancel={() => {
             rotating.current = false;
             finish();
           }}
